@@ -19,3 +19,5 @@ jobs:
         run: node -e 'JSON.parse(require("fs").readFileSync("manifest.json", "utf8"))'
       - name: Test scheduling logic
         run: node tests/test_schedule.js
+      - name: Test theme catalog
+        run: bash tests/test_theme_catalog.sh

@@ -10,6 +10,8 @@ Item {
   readonly property string configDir: home + "/.config/omarchy/theme-scheduler"
   readonly property string configPath: configDir + "/config.json"
   readonly property string currentThemePath: home + "/.local/state/omarchy/current/theme.name"
+  readonly property string themeCatalogScriptPath: decodeURIComponent(
+    String(Qt.resolvedUrl("ThemeCatalog.sh")).replace(/^file:\/\//, ""))
 
   property bool loaded: false
   property bool enabled: false
@@ -20,6 +22,8 @@ Item {
   property string lastHandledBoundary: ""
 
   property var themes: []
+  readonly property var dayThemeOptions: Schedule.themeOptions(themes, Schedule.RANDOM_LIGHT)
+  readonly property var nightThemeOptions: Schedule.themeOptions(themes, Schedule.RANDOM_DARK)
   property string currentTheme: "Unknown"
   property date now: new Date()
   property bool switchBusy: false
@@ -29,7 +33,8 @@ Item {
   property string lastAction: ""
 
   readonly property string period: Schedule.periodAt(now, currentConfig())
-  readonly property string desiredTheme: Schedule.desiredTheme(now, currentConfig())
+  readonly property string desiredSelection: Schedule.desiredTheme(now, currentConfig())
+  readonly property string desiredTheme: Schedule.selectionLabel(desiredSelection)
   readonly property string nextSwitchText: Schedule.nextSwitchText(now, currentConfig())
 
   function currentConfig() {
@@ -88,13 +93,25 @@ Item {
     root.now = new Date()
     var boundary = Schedule.boundaryToken(root.now, root.currentConfig())
     if (boundary === root.lastHandledBoundary) return
-    switchTo(root.desiredTheme, boundary)
+    switchSelection(root.desiredSelection, boundary)
   }
 
   function applyNow() {
     if (!root.loaded || root.switchBusy) return
     root.now = new Date()
-    switchTo(root.desiredTheme, Schedule.boundaryToken(root.now, root.currentConfig()))
+    switchSelection(root.desiredSelection,
+                    Schedule.boundaryToken(root.now, root.currentConfig()))
+  }
+
+  function switchSelection(selection, boundary) {
+    var target = Schedule.resolveTheme(selection, root.themes,
+                                       root.currentTheme, Math.random())
+    if (!target) {
+      var mode = Schedule.randomMode(selection)
+      root.lastError = "No " + mode + " themes declare a mode in colors.toml."
+      return
+    }
+    switchTo(target, boundary)
   }
 
   function switchTo(theme, boundary) {
@@ -144,7 +161,7 @@ Item {
   }
 
   property Process themeListProcess: Process {
-    command: ["omarchy", "theme", "list"]
+    command: ["bash", root.themeCatalogScriptPath]
     stdout: StdioCollector {
       id: themeListOutput
       waitForEnd: true
@@ -158,13 +175,8 @@ Item {
         root.lastError = String(themeListError.text || "Could not list themes").trim()
         return
       }
-      var lines = String(themeListOutput.text || "").split("\n")
-      var result = []
-      for (var i = 0; i < lines.length; i++) {
-        var name = lines[i].trim()
-        if (name && result.indexOf(name) === -1) result.push(name)
-      }
-      root.themes = result
+      root.themes = Schedule.parseThemeCatalog(themeListOutput.text)
+      Qt.callLater(root.reconcile)
     }
   }
 

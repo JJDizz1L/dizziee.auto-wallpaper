@@ -120,7 +120,7 @@ Panel {
               width: parent.width - dayTimePicker.width - parent.spacing
               label: "Theme"
               value: root.service ? root.service.dayTheme : ""
-              options: root.service ? root.service.themes : []
+              options: root.service ? root.service.dayThemeOptions : []
               placeholderText: "Search themes..."
               foreground: root.foreground
               fontFamily: root.fontFamily
@@ -154,7 +154,7 @@ Panel {
               width: parent.width - nightTimePicker.width - parent.spacing
               label: "Theme"
               value: root.service ? root.service.nightTheme : ""
-              options: root.service ? root.service.themes : []
+              options: root.service ? root.service.nightThemeOptions : []
               placeholderText: "Search themes..."
               foreground: root.foreground
               fontFamily: root.fontFamily

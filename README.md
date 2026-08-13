@@ -7,6 +7,7 @@ and does not require root access or systemd units.
 ## Features
 
 - Independent day and night themes
+- Random light and dark choices using each theme's Omarchy mode metadata
 - 15-minute schedule controls
 - Local-time operation with overnight schedules supported
 - Resume/restart catch-up
@@ -63,6 +64,13 @@ At each day/night boundary, the service applies the configured theme with
 means choosing another theme manually will not be immediately undone; the
 scheduler takes control again at the next boundary.
 
+The day and night pickers also offer **Random light theme** and **Random dark
+theme**. Omarchy declares the classification as `mode = "light"` or `mode =
+"dark"` in each theme's effective `colors.toml`. Themes without that metadata
+remain available for explicit selection but are excluded from random choices.
+Each picker lists its matching mode first, the opposite mode second, and any
+unclassified themes last; themes within every group are alphabetical.
+
 The service evaluates the wall clock every minute. If the computer sleeps
 through a boundary or Omarchy Shell starts later, it applies the theme for the
 current period when it resumes.
@@ -71,6 +79,7 @@ current period when it resumes.
 
 ```bash
 node tests/test_schedule.js
+bash tests/test_theme_catalog.sh
 omarchy plugin validate .
 qmllint -I /usr/share/omarchy/shell ./*.qml
 ```

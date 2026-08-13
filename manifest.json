@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "acrogenesis.theme-scheduler",
   "name": "Theme Scheduler",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "acrogenesis",
   "license": "MIT",
   "description": "Automatically switch between light and dark Omarchy themes on a daily schedule.",

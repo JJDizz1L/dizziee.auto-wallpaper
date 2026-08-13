@@ -9,6 +9,9 @@ var DEFAULTS = {
   lastHandledBoundary: ""
 }
 
+var RANDOM_LIGHT = "@random-light"
+var RANDOM_DARK = "@random-dark"
+
 function integer(value, fallback) {
   var parsed = Number(value)
   return isFinite(parsed) && Math.floor(parsed) === parsed ? parsed : fallback
@@ -71,6 +74,96 @@ function desiredTheme(date, config) {
     ? normalized.dayTheme : normalized.nightTheme
 }
 
+function randomMode(value) {
+  if (value === RANDOM_LIGHT) return "light"
+  if (value === RANDOM_DARK) return "dark"
+  return ""
+}
+
+function selectionLabel(value) {
+  var mode = randomMode(value)
+  return mode ? "Random " + mode + " theme" : String(value || "")
+}
+
+function parseThemeCatalog(text) {
+  var result = []
+  var seen = {}
+  var lines = String(text || "").split("\n")
+  for (var i = 0; i < lines.length; i++) {
+    var fields = lines[i].split("\t")
+    var name = String(fields[0] || "").trim()
+    if (!name || seen[name.toLowerCase()]) continue
+    var mode = String(fields[1] || "").trim().toLowerCase()
+    if (mode !== "light" && mode !== "dark") mode = ""
+    result.push({ name: name, mode: mode })
+    seen[name.toLowerCase()] = true
+  }
+  return result
+}
+
+function themeOptions(catalog, randomSelection) {
+  var mode = randomMode(randomSelection) || String(randomSelection || "").toLowerCase()
+  var token = mode === "dark" ? RANDOM_DARK : RANDOM_LIGHT
+  var count = 0
+  var options = []
+  var themes = Array.isArray(catalog) ? catalog : []
+  for (var i = 0; i < themes.length; i++)
+    if (themes[i] && themes[i].mode === mode) count++
+
+  options.push({
+    value: token,
+    label: selectionLabel(token),
+    description: count + " classified " + mode + (count === 1 ? " theme" : " themes")
+  })
+
+  var ordered = themes.slice().sort(function(left, right) {
+    var leftMode = left && left.mode ? left.mode : ""
+    var rightMode = right && right.mode ? right.mode : ""
+    var leftRank = leftMode === mode ? 0 : (leftMode ? 1 : 2)
+    var rightRank = rightMode === mode ? 0 : (rightMode ? 1 : 2)
+    if (leftRank !== rightRank) return leftRank - rightRank
+
+    var leftName = String(left && left.name ? left.name : "").toLowerCase()
+    var rightName = String(right && right.name ? right.name : "").toLowerCase()
+    if (leftName < rightName) return -1
+    if (leftName > rightName) return 1
+    return 0
+  })
+
+  for (var j = 0; j < ordered.length; j++) {
+    var theme = ordered[j]
+    if (!theme || !theme.name) continue
+    options.push({
+      value: theme.name,
+      label: theme.name,
+      description: theme.mode ? theme.mode + " theme" : "theme mode not declared"
+    })
+  }
+  return options
+}
+
+function resolveTheme(selection, catalog, currentTheme, randomValue) {
+  var mode = randomMode(selection)
+  if (!mode) return String(selection || "").trim()
+
+  var themes = Array.isArray(catalog) ? catalog : []
+  var pool = []
+  for (var i = 0; i < themes.length; i++) {
+    if (themes[i] && themes[i].mode === mode && themes[i].name)
+      pool.push(String(themes[i].name))
+  }
+  if (!pool.length) return ""
+
+  var current = String(currentTheme || "").toLowerCase()
+  if (pool.length > 1 && current)
+    pool = pool.filter(function(name) { return name.toLowerCase() !== current })
+
+  var value = Number(randomValue)
+  if (!isFinite(value) || value < 0) value = Math.random()
+  var index = Math.min(pool.length - 1, Math.floor(value * pool.length))
+  return pool[index]
+}
+
 function localDateKey(date) {
   return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate())
 }
@@ -111,7 +204,8 @@ function nextSwitchText(date, config) {
   var dayOffset = new Date(next.getFullYear(), next.getMonth(), next.getDate()).getTime()
     - new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
   var prefix = dayOffset >= 86400000 ? "Tomorrow at " : "Today at "
-  return prefix + timeLabel(next.getHours() * 60 + next.getMinutes()) + " · " + nextTheme
+  return prefix + timeLabel(next.getHours() * 60 + next.getMinutes()) + " · "
+    + selectionLabel(nextTheme)
 }
 
 function timeOptions(step) {
