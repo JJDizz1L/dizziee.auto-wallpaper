@@ -24,6 +24,22 @@ The plugin is safe on first install: its internal automation toggle defaults
 to off. Add its widget to the bar, choose the two themes and times, then enable
 automatic switching.
 
+## Requirements
+
+- Omarchy 4 with the Quattro shell plugin API
+- No external packages, root access, or background system services
+
+## Remove
+
+```bash
+omarchy plugin remove acrogenesis.theme-scheduler
+```
+
+Removing the plugin leaves its settings at
+`~/.config/omarchy/theme-scheduler/config.json` so a later reinstall can reuse
+them. Delete that file separately only if you also want to discard the saved
+schedule and theme choices.
+
 For local development:
 
 ```bash
