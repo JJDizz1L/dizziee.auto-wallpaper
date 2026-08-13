@@ -68,8 +68,9 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: root.ready && root.scheduler.period === "day" ? "󰖨" : "󰖔"
-    dimmed: !root.ready || !root.scheduler.enabled
+    text: !root.ready || !root.scheduler.enabled
+      ? "AUTO" : (root.scheduler.period === "day" ? "☀" : "☾")
+    dimmed: false
     active: root.ready && root.scheduler.lastError !== ""
     tooltipText: !root.ready ? "Theme Scheduler unavailable"
       : (root.scheduler.enabled ? root.scheduler.nextSwitchText : "Theme Scheduler is off")
