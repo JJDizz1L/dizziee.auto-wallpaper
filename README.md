@@ -16,8 +16,6 @@ and does not require root access or systemd units.
 
 ## Install
 
-Once the repository is public:
-
 ```bash
 omarchy plugin add https://github.com/acrogenesis/omarchy-theme-scheduler.git --enable
 ```
