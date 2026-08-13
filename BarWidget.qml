@@ -15,6 +15,12 @@ BarWidget {
   readonly property bool ready: scheduler !== null
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
 
+  // Item does not derive implicit size from children. Without forwarding the
+  // button's size, Omarchy creates a live but zero-width bar slot: IPC can open
+  // the panel, yet there is nothing on the bar to click.
+  implicitWidth: button.implicitWidth
+  implicitHeight: button.implicitHeight
+
   function open() { if (panelLoader.item) panelLoader.item.open() }
   function close() { if (panelLoader.item) panelLoader.item.close() }
   function toggle() { if (panelLoader.item) panelLoader.item.toggle() }
