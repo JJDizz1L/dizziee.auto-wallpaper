@@ -7,28 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-08-13
+## [1.0.0] - 2026-08-15
 
 ### Added
 
-- Random day and night theme selections based on Omarchy's `colors.toml` mode metadata.
-- Theme pickers grouped by preferred mode with alphabetical ordering within each group.
-
-## [0.1.0] - 2026-08-13
-
-### Added
-
-- Automatic switching between independently selected day and night themes.
-- Local-time schedules configurable in 15-minute increments.
-- Catch-up after sleep, restart, or a missed schedule boundary.
-- Overnight schedule support.
-- Manual theme overrides that remain active until the next boundary.
-- Omarchy bar panel with enable/disable controls and an apply-now action.
-- Sun and moon bar indicators, dimmed while automation is disabled.
+- Wallpaper preview grid for the active theme, with click-to-apply and a
+  highlighted border on the current wallpaper.
+- Automatic wallpaper cycling on a schedule: sequential advance or shuffle
+  (play every wallpaper once before repeating).
+- Interval options from 5 minutes to 24 hours.
+- Theme-name detection that resets the rotation when the active theme changes.
+- Persistent configuration under `~/.config/omarchy/auto-wallpaper/`.
+- Omarchy bar widget with a "next wallpaper" tooltip and a middle-click to
+  apply the next wallpaper now.
 - Shell IPC commands for status, enable, disable, and immediate application.
-- Persistent configuration under `~/.config/omarchy/theme-scheduler/`.
-- Scheduling unit tests and GitHub Actions CI.
+- Pure scheduling logic with unit tests and a wallpaper catalog test in CI.
 
-[Unreleased]: https://github.com/acrogenesis/omarchy-theme-scheduler/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/acrogenesis/omarchy-theme-scheduler/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/acrogenesis/omarchy-theme-scheduler/releases/tag/v0.1.0
+### Changed
+
+- Rebranded from the upstream `acrogenesis.theme-scheduler` plugin as
+  `dizziee.auto-wallpaper`, focused on wallpaper rotation instead of light/dark
+  theme switching.
+
+[Unreleased]: https://github.com/JJDizz1L/dizziee.auto-wallpaper/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/JJDizz1L/dizziee.auto-wallpaper/releases/tag/v1.0.0

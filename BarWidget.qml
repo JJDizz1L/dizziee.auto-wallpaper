@@ -4,27 +4,26 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
-import "Schedule.js" as Schedule
 
 BarWidget {
   id: root
-  moduleName: "acrogenesis.theme-scheduler"
+  moduleName: "dizziee.auto-wallpaper"
 
-  readonly property var scheduler: bar && bar.shell
+  readonly property var service: bar && bar.shell
     ? bar.shell.serviceFor(root.moduleName) : null
-  readonly property bool ready: scheduler !== null
+  readonly property bool ready: service !== null
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
+  readonly property bool showError: ready && service.lastError !== ""
 
-  // Item does not derive implicit size from children. Without forwarding the
-  // button's size, Omarchy creates a live but zero-width bar slot: IPC can open
-  // the panel, yet there is nothing on the bar to click.
+  // BarWidget does not derive implicit size from children; forward the
+  // button's size so a live, clickable slot is created.
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
   function open() { if (panelLoader.item) panelLoader.item.open() }
   function close() { if (panelLoader.item) panelLoader.item.close() }
   function toggle() { if (panelLoader.item) panelLoader.item.toggle() }
-  function applyNow() { if (ready) scheduler.applyNow() }
+  function applyNow() { if (ready) service.applyNext() }
 
   function injectPanel() {
     var target = panelLoader.item
@@ -32,11 +31,11 @@ BarWidget {
     target.bar = root.bar
     target.anchorItem = button
     target.hostWidget = root
-    target.service = root.scheduler
+    target.service = root.service
   }
 
   onBarChanged: injectPanel()
-  onSchedulerChanged: injectPanel()
+  onServiceChanged: injectPanel()
 
   Loader {
     id: panelLoader
@@ -58,15 +57,17 @@ BarWidget {
     function hide(): void { root.close() }
     function toggle(): void { root.toggle() }
     function applyNow(): void { root.applyNow() }
-    function enable(): void { if (root.ready) root.scheduler.setEnabled(true) }
-    function disable(): void { if (root.ready) root.scheduler.setEnabled(false) }
+    function next(): void { root.applyNow() }
+    function enable(): void { if (root.ready) root.service.setEnabled(true) }
+    function disable(): void { if (root.ready) root.service.setEnabled(false) }
     function status(): string {
       if (!root.ready) return "service unavailable"
-      return "enabled=" + root.scheduler.enabled
-        + " current=" + root.scheduler.currentTheme
-        + " desired=" + root.scheduler.desiredTheme
-        + " next=\"" + root.scheduler.nextSwitchText + "\""
-        + (root.scheduler.lastError ? " error=\"" + root.scheduler.lastError + "\"" : "")
+      return "enabled=" + root.service.enabled
+        + " theme=" + root.service.currentThemeDisplay
+        + " count=" + root.service.catalogPaths.length
+        + " current=\"" + root.service.currentWallpaperDisplay() + "\""
+        + " next=\"" + root.service.nextText() + "\""
+        + (root.service.lastError ? " error=\"" + root.service.lastError + "\"" : "")
     }
   }
 
@@ -74,11 +75,11 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: root.ready && root.scheduler.period === "day" ? "☀" : "☾"
-    dimmed: !root.ready || !root.scheduler.enabled
-    active: root.ready && root.scheduler.lastError !== ""
-    tooltipText: !root.ready ? "Theme Scheduler unavailable"
-      : (root.scheduler.enabled ? root.scheduler.nextSwitchText : "Theme Scheduler is off")
+    text: "🖼"
+    dimmed: !root.ready || !root.service.enabled
+    active: root.showError
+    tooltipText: !root.ready ? "Auto Wallpaper unavailable"
+      : (root.service.enabled ? root.service.nextText() : "Auto Wallpaper is off")
     onPressed: function(code) {
       if (code === Qt.MiddleButton) root.applyNow()
       else root.toggle()

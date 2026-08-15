@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "acrogenesis.theme-scheduler",
-  "name": "Theme Scheduler",
-  "version": "0.2.0",
-  "author": "acrogenesis",
+  "id": "dizziee.auto-wallpaper",
+  "name": "Auto Wallpaper",
+  "version": "1.0.0",
+  "author": "Dizziee",
   "license": "MIT",
-  "description": "Automatically switch between light and dark Omarchy themes on a daily schedule.",
+  "description": "Preview the active theme's wallpapers and automatically cycle or shuffle them on a schedule.",
   "kinds": [
     "service",
     "bar-widget"
@@ -15,8 +15,8 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Theme Scheduler",
-    "description": "Configure and monitor automatic light and dark theme switching.",
+    "displayName": "Auto Wallpaper",
+    "description": "Preview and automatically cycle the active theme's wallpapers.",
     "category": "System",
     "allowMultiple": false,
     "defaultSection": "right"

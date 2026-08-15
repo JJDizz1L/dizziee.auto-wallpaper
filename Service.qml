@@ -7,46 +7,59 @@ Item {
   id: root
 
   readonly property string home: Quickshell.env("HOME")
-  readonly property string configDir: home + "/.config/omarchy/theme-scheduler"
+  readonly property string configDir: home + "/.config/omarchy/auto-wallpaper"
   readonly property string configPath: configDir + "/config.json"
-  readonly property string currentThemePath: home + "/.local/state/omarchy/current/theme.name"
-  readonly property string themeCatalogScriptPath: decodeURIComponent(
-    String(Qt.resolvedUrl("ThemeCatalog.sh")).replace(/^file:\/\//, ""))
+  readonly property string themeNamePath: home + "/.local/state/omarchy/current/theme.name"
+  readonly property string currentBgLink: home + "/.local/state/omarchy/current/background"
+  readonly property string catalogScriptPath: decodeURIComponent(
+    String(Qt.resolvedUrl("WallpaperCatalog.sh")).replace(/^file:\/\//, ""))
 
+  // Watched config (mirrors Schedule.DEFAULTS).
   property bool loaded: false
   property bool enabled: false
-  property string dayTheme: Schedule.DEFAULTS.dayTheme
-  property string nightTheme: Schedule.DEFAULTS.nightTheme
-  property int dayStart: Schedule.DEFAULTS.dayStart
-  property int nightStart: Schedule.DEFAULTS.nightStart
-  property string lastHandledBoundary: ""
+  property int intervalMinutes: Schedule.DEFAULTS.intervalMinutes
+  property string mode: Schedule.DEFAULTS.mode
+  property int lastChangeEpoch: Schedule.DEFAULTS.lastChangeEpoch
+  property var cycle: []
+  property int cycleIndex: 0
+  property string cycleTheme: ""
 
-  property var themes: []
-  readonly property var dayThemeOptions: Schedule.themeOptions(themes, Schedule.RANDOM_LIGHT)
-  readonly property var nightThemeOptions: Schedule.themeOptions(themes, Schedule.RANDOM_DARK)
-  property string currentTheme: "Unknown"
-  property date now: new Date()
-  property bool switchBusy: false
-  property string pendingTheme: ""
-  property string pendingBoundary: ""
+  // Live theme + wallpaper state.
+  property string currentTheme: ""
+  property string currentThemeDisplay: "Unknown"
+  property var catalogPaths: []
+  property var wallpaperList: []
+  property string currentWallpaper: ""
+  property int nowEpoch: 0
+
+  // Action state.
+  property bool busy: false
+  property string pendingWallpaper: ""
+  property var pendingNext: null
   property string lastError: ""
   property string lastAction: ""
 
-  readonly property string period: Schedule.periodAt(now, currentConfig())
-  readonly property string desiredSelection: Schedule.desiredTheme(now, currentConfig())
-  readonly property string desiredTheme: Schedule.selectionLabel(desiredSelection)
-  readonly property string nextSwitchText: Schedule.nextSwitchText(now, currentConfig())
+  readonly property bool shuffle: root.mode === Schedule.MODE_SHUFFLE
 
   function currentConfig() {
     return {
       enabled: root.enabled,
-      dayTheme: root.dayTheme,
-      nightTheme: root.nightTheme,
-      dayStart: root.dayStart,
-      nightStart: root.nightStart,
-      lastHandledBoundary: root.lastHandledBoundary
+      intervalMinutes: root.intervalMinutes,
+      mode: root.mode,
+      lastChangeEpoch: root.lastChangeEpoch,
+      cycle: root.cycle,
+      cycleIndex: root.cycleIndex,
+      cycleTheme: root.cycleTheme
     }
   }
+
+  // Public-facing state for the panel and bar.
+  function currentWallpaperDisplay() {
+    return Schedule.wallpaperName(root.currentWallpaper)
+  }
+
+  function modeLabel() { return Schedule.modeLabel(root.mode) }
+  function intervalLabel() { return Schedule.intervalLabel(root.intervalMinutes) }
 
   function applyConfig(text) {
     var parsed = {}
@@ -54,13 +67,14 @@ Item {
     catch (error) { root.lastError = "Invalid config.json: " + error }
     var config = Schedule.normalize(parsed)
     root.enabled = config.enabled
-    root.dayTheme = config.dayTheme
-    root.nightTheme = config.nightTheme
-    root.dayStart = config.dayStart
-    root.nightStart = config.nightStart
-    root.lastHandledBoundary = config.lastHandledBoundary
+    root.intervalMinutes = config.intervalMinutes
+    root.mode = config.mode
+    root.lastChangeEpoch = config.lastChangeEpoch
+    root.cycle = config.cycle
+    root.cycleIndex = config.cycleIndex
+    root.cycleTheme = config.cycleTheme
     root.loaded = true
-    root.now = new Date()
+    root.nowEpoch = Date.now()
     Qt.callLater(root.reconcile)
   }
 
@@ -74,74 +88,123 @@ Item {
   }
 
   function setEnabled(value) {
-    saveConfig({ enabled: value === true })
-    if (value === true) Qt.callLater(root.applyNow)
+    root.saveConfig({ enabled: value === true })
+    if (value === true) Qt.callLater(root.applyNext)
     else root.lastAction = "Automatic switching disabled"
   }
 
   function updateSchedule(patch) {
-    saveConfig(patch)
+    root.saveConfig(patch)
     root.lastAction = "Schedule saved"
   }
 
-  function refreshThemes() {
-    if (!themeListProcess.running) themeListProcess.running = true
+  function refreshCatalog() {
+    if (!catalogProc.running) catalogProc.running = true
+  }
+
+  function updateCurrent() {
+    if (!currentProc.running) currentProc.running = true
+  }
+
+  function peekNext() {
+    if (!root.enabled) return ""
+    var result = Schedule.pickNext(root.currentConfig(), root.catalogPaths,
+                                    root.currentWallpaper, root.currentTheme, Math.random)
+    return result.path
+  }
+
+  function nextText() {
+    if (!root.enabled) return "Automatic switching is off"
+    var target = root.peekNext()
+    if (!target) return "No other wallpaper to show"
+    var minutes = Schedule.minutesUntil(root.currentConfig(), root.nowEpoch)
+    var prefix = minutes > 0 ? minutes + " min" : "now"
+    return "Next in " + prefix + " · " + Schedule.wallpaperName(target)
+  }
+
+  function statusText() {
+    return "Theme: " + root.currentThemeDisplay
+      + " · " + root.catalogPaths.length + " wallpaper"
+      + (root.catalogPaths.length === 1 ? "" : "s") + " · "
+      + Schedule.modeLabel(root.mode)
+  }
+
+  function applyNext() {
+    if (root.busy) return
+    var result = Schedule.pickNext(root.currentConfig(), root.catalogPaths,
+                                    root.currentWallpaper, root.currentTheme, Math.random)
+    if (result.changed && result.path) {
+      root.pendingWallpaper = result.path
+      root.switchTo(result.path, result)
+    } else {
+      root.lastAction = root.catalogPaths.length > 0
+        ? "Already showing the only wallpaper" : "No wallpapers for this theme"
+      root.saveConfig({ lastChangeEpoch: Date.now() })
+    }
+  }
+
+  function setWallpaper(path) {
+    if (root.busy || !path) return
+    root.switchTo(path, null)
+  }
+
+  function switchTo(path, nextResult) {
+    var target = String(path || "").trim()
+    if (!target) {
+      root.lastError = "No wallpaper selected."
+      return
+    }
+    root.pendingWallpaper = target
+    root.pendingNext = nextResult
+    root.lastError = ""
+    setProc.command = ["omarchy-theme-bg-set", target]
+    root.busy = true
+    setProc.running = true
   }
 
   function reconcile() {
-    if (!root.loaded || !root.enabled || root.switchBusy) return
-    root.now = new Date()
-    var boundary = Schedule.boundaryToken(root.now, root.currentConfig())
-    if (boundary === root.lastHandledBoundary) return
-    switchSelection(root.desiredSelection, boundary)
+    if (!root.loaded || root.busy) return
+    root.nowEpoch = Date.now()
+    if (!root.enabled) return
+    if (Schedule.isDue(root.currentConfig(), root.nowEpoch)) root.applyNext()
+  }
+  function onThemeChanged(slug) {
+    var theme = String(slug || "").trim()
+    root.currentTheme = theme
+    root.currentThemeDisplay = Schedule.wallpaperName(theme) || "Unknown"
+    // New theme, new wallpaper set: let the user see it before any scheduled
+    // switch, and let pickNext rebuild the shuffle cycle on the next change.
+    root.saveConfig({ lastChangeEpoch: Date.now(), cycle: [], cycleTheme: "" })
+    root.lastAction = "Theme changed to " + root.currentThemeDisplay
+    root.refreshCatalog()
   }
 
-  function applyNow() {
-    if (!root.loaded || root.switchBusy) return
-    root.now = new Date()
-    switchSelection(root.desiredSelection,
-                    Schedule.boundaryToken(root.now, root.currentConfig()))
-  }
-
-  function switchSelection(selection, boundary) {
-    var target = Schedule.resolveTheme(selection, root.themes,
-                                       root.currentTheme, Math.random())
-    if (!target) {
-      var mode = Schedule.randomMode(selection)
-      root.lastError = "No " + mode + " themes declare a mode in colors.toml."
-      return
+  function onSetExited(exitCode) {
+    root.busy = false
+    var applied = root.pendingWallpaper
+    if (exitCode === 0) {
+      root.currentWallpaper = applied
+      // Start the next schedule interval and keep the shuffle cycle aligned
+      // with whichever wallpaper we just showed.
+      var next = root.pendingNext
+      var patch = { lastChangeEpoch: Date.now(), cycleTheme: root.currentTheme }
+      if (next) {
+        patch.cycle = next.cycle
+        patch.cycleIndex = next.cycleIndex
+      }
+      root.saveConfig(patch)
+      if (!root.currentProc.running) root.currentProc.running = true
+      root.lastAction = "Wallpaper set to " + Schedule.wallpaperName(applied)
+      root.lastError = ""
+    } else {
+      root.lastError = String(setError.text || "Wallpaper change failed").trim()
     }
-    switchTo(target, boundary)
+    root.pendingWallpaper = ""
+    root.pendingNext = null
   }
 
-  function switchTo(theme, boundary) {
-    var target = String(theme || "").trim()
-    if (!target) {
-      root.lastError = "No theme is configured for the current period."
-      return
-    }
-
-    root.pendingTheme = target
-    root.pendingBoundary = boundary
-    root.lastError = ""
-
-    if (root.currentTheme.toLowerCase() === target.toLowerCase()) {
-      root.lastHandledBoundary = boundary
-      saveConfig({ lastHandledBoundary: boundary })
-      root.lastAction = target + " is already active"
-      return
-    }
-
-    switchProcess.command = ["omarchy", "theme", "set", target]
-    root.switchBusy = true
-    switchProcess.running = true
-  }
-
-  property Process configDirProcess: Process {
-    command: ["mkdir", "-p", root.configDir]
-  }
-
-  property FileView configFile: FileView {
+  FileView {
+    id: configFile
     path: root.configPath
     watchChanges: true
     printErrors: false
@@ -151,69 +214,85 @@ Item {
     onFileChanged: reload()
   }
 
-  property FileView currentThemeFile: FileView {
-    path: root.currentThemePath
+  FileView {
+    id: themeNameFile
+    path: root.themeNamePath
     watchChanges: true
     printErrors: false
-    onLoaded: root.currentTheme = Schedule.displayTheme(text())
-    onLoadFailed: root.currentTheme = "Unknown"
+    onLoaded: root.onThemeChanged(text())
+    onLoadFailed: root.onThemeChanged("")
     onFileChanged: reload()
   }
 
-  property Process themeListProcess: Process {
-    command: ["bash", root.themeCatalogScriptPath]
+  Process {
+    id: configDirProcess
+    command: ["mkdir", "-p", root.configDir]
+  }
+
+  Process {
+    id: catalogProc
+    command: ["bash", root.catalogScriptPath]
     stdout: StdioCollector {
-      id: themeListOutput
+      id: catalogOutput
       waitForEnd: true
     }
     stderr: StdioCollector {
-      id: themeListError
+      id: catalogError
       waitForEnd: true
     }
     onExited: function(exitCode) {
       if (exitCode !== 0) {
-        root.lastError = String(themeListError.text || "Could not list themes").trim()
+        root.lastError = String(catalogError.text || "Could not list wallpapers").trim()
         return
       }
-      root.themes = Schedule.parseThemeCatalog(themeListOutput.text)
+      root.catalogPaths = Schedule.parseWallpaperCatalog(catalogOutput.text)
+      var list = []
+      for (var i = 0; i < root.catalogPaths.length; i++) {
+        var path = root.catalogPaths[i]
+        list.push({ path: path, name: Schedule.wallpaperName(path) })
+      }
+      root.wallpaperList = list
       Qt.callLater(root.reconcile)
     }
   }
 
-  property Process switchProcess: Process {
-    stderr: StdioCollector {
-      id: switchError
+  Process {
+    id: currentProc
+    command: ["readlink", "-f", root.currentBgLink]
+    stdout: StdioCollector {
       waitForEnd: true
-    }
-    onExited: function(exitCode) {
-      root.switchBusy = false
-      if (exitCode === 0) {
-        var applied = root.pendingTheme
-        root.lastHandledBoundary = root.pendingBoundary
-        root.currentTheme = applied
-        root.saveConfig({ lastHandledBoundary: root.pendingBoundary })
-        root.lastAction = "Switched to " + applied
-        root.lastError = ""
-        currentThemeFile.reload()
-      } else {
-        root.lastError = String(switchError.text || "Theme switch failed").trim()
+      onStreamFinished: {
+        var path = String(text || "").trim()
+        root.currentWallpaper = path !== root.currentWallpaper ? path : root.currentWallpaper
       }
-      root.pendingTheme = ""
-      root.pendingBoundary = ""
     }
   }
 
-  SystemClock {
-    id: clock
-    precision: SystemClock.Minutes
-    onDateChanged: {
-      root.now = date
+  Process {
+    id: setProc
+    stderr: StdioCollector {
+      id: setError
+      waitForEnd: true
+    }
+    onExited: function(exitCode) { root.onSetExited(exitCode) }
+  }
+
+  Timer {
+    id: tickTimer
+    interval: 5000
+    running: root.loaded
+    repeat: true
+    onTriggered: {
+      root.updateCurrent()
       root.reconcile()
     }
   }
 
   Component.onCompleted: {
-    root.configDirProcess.running = true
-    root.refreshThemes()
+    root.nowEpoch = Date.now()
+    configDirProcess.running = true
+    root.updateCurrent()
+    root.refreshCatalog()
   }
 }
+

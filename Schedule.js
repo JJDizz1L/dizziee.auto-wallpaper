@@ -2,225 +2,191 @@
 
 var DEFAULTS = {
   enabled: false,
-  dayTheme: "Flexoki Light",
-  nightTheme: "Matte Black",
-  dayStart: 420,
-  nightStart: 1140,
-  lastHandledBoundary: ""
+  intervalMinutes: 60,
+  mode: "sequential",
+  lastChangeEpoch: 0,
+  cycle: [],
+  cycleIndex: 0,
+  cycleTheme: ""
 }
 
-var RANDOM_LIGHT = "@random-light"
-var RANDOM_DARK = "@random-dark"
+var MODE_SEQUENTIAL = "sequential"
+var MODE_SHUFFLE = "shuffle"
 
 function integer(value, fallback) {
   var parsed = Number(value)
   return isFinite(parsed) && Math.floor(parsed) === parsed ? parsed : fallback
 }
 
-function minute(value, fallback) {
+function interval(value, fallback) {
   var parsed = integer(value, fallback)
-  return parsed >= 0 && parsed < 1440 ? parsed : fallback
+  return parsed >= 1 && parsed <= 1440 ? parsed : fallback
 }
 
-function themeName(value, fallback) {
-  var name = typeof value === "string" ? value.trim() : ""
-  return name.length ? name : fallback
+function mode(value, fallback) {
+  return value === MODE_SHUFFLE ? MODE_SHUFFLE : MODE_SEQUENTIAL
 }
 
 function normalize(raw) {
   var source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}
-  var dayStart = minute(source.dayStart, DEFAULTS.dayStart)
-  var nightStart = minute(source.nightStart, DEFAULTS.nightStart)
-  if (dayStart === nightStart) nightStart = (dayStart + 720) % 1440
-
   return {
     enabled: source.enabled === true,
-    dayTheme: themeName(source.dayTheme, DEFAULTS.dayTheme),
-    nightTheme: themeName(source.nightTheme, DEFAULTS.nightTheme),
-    dayStart: dayStart,
-    nightStart: nightStart,
-    lastHandledBoundary: typeof source.lastHandledBoundary === "string"
-      ? source.lastHandledBoundary : ""
+    intervalMinutes: interval(source.intervalMinutes, DEFAULTS.intervalMinutes),
+    mode: mode(source.mode, DEFAULTS.mode),
+    lastChangeEpoch: integer(source.lastChangeEpoch, DEFAULTS.lastChangeEpoch),
+    cycle: Array.isArray(source.cycle) ? source.cycle.slice() : [],
+    cycleIndex: integer(source.cycleIndex, DEFAULTS.cycleIndex),
+    cycleTheme: typeof source.cycleTheme === "string" ? source.cycleTheme : ""
   }
 }
 
-function pad(value) {
-  return String(value).padStart(2, "0")
-}
-
-function timeLabel(minutes) {
-  var value = minute(minutes, 0)
-  return pad(Math.floor(value / 60)) + ":" + pad(value % 60)
-}
-
-function minuteOfDay(date) {
-  return date.getHours() * 60 + date.getMinutes()
-}
-
-function isDayAt(minutes, dayStart, nightStart) {
-  if (dayStart < nightStart) return minutes >= dayStart && minutes < nightStart
-  return minutes >= dayStart || minutes < nightStart
-}
-
-function periodAt(date, config) {
-  var normalized = normalize(config)
-  return isDayAt(minuteOfDay(date), normalized.dayStart, normalized.nightStart)
-    ? "day" : "night"
-}
-
-function desiredTheme(date, config) {
-  var normalized = normalize(config)
-  return periodAt(date, normalized) === "day"
-    ? normalized.dayTheme : normalized.nightTheme
-}
-
-function randomMode(value) {
-  if (value === RANDOM_LIGHT) return "light"
-  if (value === RANDOM_DARK) return "dark"
-  return ""
-}
-
-function selectionLabel(value) {
-  var mode = randomMode(value)
-  return mode ? "Random " + mode + " theme" : String(value || "")
-}
-
-function parseThemeCatalog(text) {
+// Parse the catalog script's newline-separated absolute paths into a list,
+// ignoring blank lines and keeping stable file order.
+function parseWallpaperCatalog(text) {
   var result = []
   var seen = {}
   var lines = String(text || "").split("\n")
   for (var i = 0; i < lines.length; i++) {
-    var fields = lines[i].split("\t")
-    var name = String(fields[0] || "").trim()
-    if (!name || seen[name.toLowerCase()]) continue
-    var mode = String(fields[1] || "").trim().toLowerCase()
-    if (mode !== "light" && mode !== "dark") mode = ""
-    result.push({ name: name, mode: mode })
-    seen[name.toLowerCase()] = true
+    var path = lines[i].trim()
+    if (!path || seen[path]) continue
+    result.push(path)
+    seen[path] = true
   }
   return result
 }
 
-function themeOptions(catalog, randomSelection) {
-  var mode = randomMode(randomSelection) || String(randomSelection || "").toLowerCase()
-  var token = mode === "dark" ? RANDOM_DARK : RANDOM_LIGHT
-  var count = 0
+// Turn a wallpaper path into a short, human-readable display name.
+function wallpaperName(path) {
+  var base = String(path || "").replace(/\\/g, "/").split("/").pop()
+  base = base.replace(/\.[^.]+$/, "")
+  if (!base) return "Unknown"
+  base = base.replace(/[-_.]+/g, " ")
+  return base.replace(/\b[a-z]/g, function(letter) { return letter.toUpperCase() })
+    .replace(/\s+/g, " ").trim()
+}
+
+// Fisher-Yates shuffle. `rng` is optional to support deterministic tests.
+function shuffle(values, rng) {
+  var a = Array.isArray(values) ? values.slice() : []
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor((rng ? rng() : Math.random()) * (i + 1))
+    var t = a[i]
+    a[i] = a[j]
+    a[j] = t
+  }
+  return a
+}
+
+function sameSet(left, right) {
+  if (left.length !== right.length) return false
+  var sortedL = left.slice().sort()
+  var sortedR = right.slice().sort()
+  for (var i = 0; i < sortedL.length; i++)
+    if (sortedL[i] !== sortedR[i]) return false
+  return true
+}
+
+// A persisted shuffle cycle stays valid only while the theme is unchanged and
+// the catalog still contains exactly the same paths.
+function cycleStillValid(cycle, catalog, cycleTheme, theme) {
+  if (cycleTheme !== theme || !Array.isArray(cycle)) return false
+  return sameSet(cycle, catalog)
+}
+// Compute the next wallpaper for the given catalog and current selection. Pure
+// and deterministic given a fixed rng. Returns the target path ("" when there
+// is nothing to change to) plus the shuffle bookkeeping that must be saved.
+//
+// Sequential: advance one slot past the current wallpaper, wrapping around.
+// Shuffle: step a persisted, never-repeating cycle. The cycle is rebuilt when
+// the theme or catalog changes, then resumes from wherever the current
+// wallpaper sits so manual picks stay part of the rotation.
+function pickNext(config, catalog, currentPath, theme, rng) {
+  var paths = Array.isArray(catalog) ? catalog.slice() : []
+  if (paths.length === 0)
+    return { path: "", cycle: [], cycleIndex: 0, changed: false }
+
+  var cycle
+  var cycleIndex
+
+  if (config.mode === MODE_SHUFFLE) {
+    if (cycleStillValid(config.cycle, paths, config.cycleTheme, theme)) {
+      cycle = config.cycle.slice()
+      cycleIndex = config.cycleIndex || 0
+    } else {
+      cycle = shuffle(paths, rng)
+      var idx = currentPath ? cycle.indexOf(currentPath) : -1
+      cycleIndex = idx >= 0 ? idx : -1
+    }
+
+    if (cycle.length <= 1)
+      return { path: "", cycle: cycle, cycleIndex: cycleIndex, changed: false }
+
+    var nextShuffle = (cycleIndex + 1) % cycle.length
+    return {
+      path: cycle[nextShuffle],
+      cycle: cycle,
+      cycleIndex: nextShuffle,
+      changed: cycle[nextShuffle] !== currentPath
+    }
+  }
+
+  var at = currentPath ? paths.indexOf(currentPath) : -1
+  if (paths.length <= 1)
+    return { path: "", cycle: [], cycleIndex: 0, changed: false }
+  var nextSeq = at >= 0 ? (at + 1) % paths.length : 0
+  return {
+    path: paths[nextSeq],
+    cycle: [],
+    cycleIndex: 0,
+    changed: paths[nextSeq] !== currentPath
+  }
+}
+
+// Is a scheduled change due right now?
+function isDue(config, nowEpoch) {
+  if (!config.enabled) return false
+  var last = config.lastChangeEpoch > 0 ? config.lastChangeEpoch : 0
+  var elapsed = nowEpoch - last
+  if (elapsed < 0) elapsed = 0
+  return elapsed >= (config.intervalMinutes || 0) * 60000
+}
+
+// Whole minutes until the next scheduled change (ceil). -1 when automation off.
+function minutesUntil(config, nowEpoch) {
+  if (!config.enabled) return -1
+  var last = config.lastChangeEpoch > 0 ? config.lastChangeEpoch : 0
+  var intervalMs = (config.intervalMinutes || 0) * 60000
+  var remaining = intervalMs - (nowEpoch - last)
+  if (remaining < 1) remaining = 1
+  return Math.ceil(remaining / 60000)
+}
+
+function modeLabel(modeValue) {
+  return modeValue === MODE_SHUFFLE ? "Shuffle" : "Sequential"
+}
+
+function intervalLabel(minutes) {
+  var value = interval(minutes, 60)
+  if (value < 60) return "Every " + value + " min"
+  var hours = value / 60
+  if (value % 60 === 0) return "Every " + hours + (hours === 1 ? " hour" : " hours")
+  return "Every " + value + " min"
+}
+
+function intervalOptions() {
+  var steps = [5, 10, 15, 30, 45, 60, 90, 120, 180, 240, 360, 480, 720, 1440]
   var options = []
-  var themes = Array.isArray(catalog) ? catalog : []
-  for (var i = 0; i < themes.length; i++)
-    if (themes[i] && themes[i].mode === mode) count++
-
-  options.push({
-    value: token,
-    label: selectionLabel(token),
-    description: count + " classified " + mode + (count === 1 ? " theme" : " themes")
-  })
-
-  var ordered = themes.slice().sort(function(left, right) {
-    var leftMode = left && left.mode ? left.mode : ""
-    var rightMode = right && right.mode ? right.mode : ""
-    var leftRank = leftMode === mode ? 0 : (leftMode ? 1 : 2)
-    var rightRank = rightMode === mode ? 0 : (rightMode ? 1 : 2)
-    if (leftRank !== rightRank) return leftRank - rightRank
-
-    var leftName = String(left && left.name ? left.name : "").toLowerCase()
-    var rightName = String(right && right.name ? right.name : "").toLowerCase()
-    if (leftName < rightName) return -1
-    if (leftName > rightName) return 1
-    return 0
-  })
-
-  for (var j = 0; j < ordered.length; j++) {
-    var theme = ordered[j]
-    if (!theme || !theme.name) continue
-    options.push({
-      value: theme.name,
-      label: theme.name,
-      description: theme.mode ? theme.mode + " theme" : "theme mode not declared"
-    })
+  for (var i = 0; i < steps.length; i++) {
+    var minutes = steps[i]
+    options.push({ value: String(minutes), label: intervalLabel(minutes) })
   }
   return options
 }
 
-function resolveTheme(selection, catalog, currentTheme, randomValue) {
-  var mode = randomMode(selection)
-  if (!mode) return String(selection || "").trim()
-
-  var themes = Array.isArray(catalog) ? catalog : []
-  var pool = []
-  for (var i = 0; i < themes.length; i++) {
-    if (themes[i] && themes[i].mode === mode && themes[i].name)
-      pool.push(String(themes[i].name))
-  }
-  if (!pool.length) return ""
-
-  var current = String(currentTheme || "").toLowerCase()
-  if (pool.length > 1 && current)
-    pool = pool.filter(function(name) { return name.toLowerCase() !== current })
-
-  var value = Number(randomValue)
-  if (!isFinite(value) || value < 0) value = Math.random()
-  var index = Math.min(pool.length - 1, Math.floor(value * pool.length))
-  return pool[index]
+function modeOptions() {
+  return [
+    { value: MODE_SEQUENTIAL, label: "Sequential" },
+    { value: MODE_SHUFFLE, label: "Shuffle" }
+  ]
 }
 
-function localDateKey(date) {
-  return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate())
-}
-
-function boundaryDate(date, config) {
-  var normalized = normalize(config)
-  var period = periodAt(date, normalized)
-  var start = period === "day" ? normalized.dayStart : normalized.nightStart
-  var boundary = new Date(date.getFullYear(), date.getMonth(), date.getDate(),
-                          Math.floor(start / 60), start % 60, 0, 0)
-  if (boundary.getTime() > date.getTime()) boundary.setDate(boundary.getDate() - 1)
-  return boundary
-}
-
-function boundaryToken(date, config) {
-  var normalized = normalize(config)
-  var period = periodAt(date, normalized)
-  var start = period === "day" ? normalized.dayStart : normalized.nightStart
-  return localDateKey(boundaryDate(date, normalized)) + "@" + period + "@" + start
-}
-
-function nextBoundary(date, config) {
-  var normalized = normalize(config)
-  var period = periodAt(date, normalized)
-  var start = period === "day" ? normalized.nightStart : normalized.dayStart
-  var next = new Date(date.getFullYear(), date.getMonth(), date.getDate(),
-                      Math.floor(start / 60), start % 60, 0, 0)
-  if (next.getTime() <= date.getTime()) next.setDate(next.getDate() + 1)
-  return next
-}
-
-function nextSwitchText(date, config) {
-  var normalized = normalize(config)
-  if (!normalized.enabled) return "Automation is off"
-  var next = nextBoundary(date, normalized)
-  var nextTheme = periodAt(date, normalized) === "day"
-    ? normalized.nightTheme : normalized.dayTheme
-  var dayOffset = new Date(next.getFullYear(), next.getMonth(), next.getDate()).getTime()
-    - new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
-  var prefix = dayOffset >= 86400000 ? "Tomorrow at " : "Today at "
-  return prefix + timeLabel(next.getHours() * 60 + next.getMinutes()) + " · "
-    + selectionLabel(nextTheme)
-}
-
-function timeOptions(step) {
-  var interval = integer(step, 15)
-  if (interval <= 0 || interval > 720) interval = 15
-  var options = []
-  for (var value = 0; value < 1440; value += interval)
-    options.push({ value: String(value), label: timeLabel(value) })
-  return options
-}
-
-function displayTheme(value) {
-  var text = String(value || "").trim().replace(/-/g, " ")
-  if (!text) return "Unknown"
-  return text.replace(/(^|\s)([a-z])/g, function(_, space, letter) {
-    return space + letter.toUpperCase()
-  })
-}

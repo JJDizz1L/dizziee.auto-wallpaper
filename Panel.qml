@@ -6,7 +6,7 @@ import "Schedule.js" as Schedule
 
 Panel {
   id: root
-  moduleName: "acrogenesis.theme-scheduler"
+  moduleName: "dizziee.auto-wallpaper"
   manageIpc: false
 
   property var anchorItem: null
@@ -17,14 +17,17 @@ Panel {
   readonly property color dim: Qt.darker(foreground, 1.45)
   readonly property color urgent: bar ? bar.urgent : Color.urgent
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
-  readonly property var timeOptions: Schedule.timeOptions(15)
-  readonly property bool dropdownOpen: dayThemePicker.popupOpen
-    || nightThemePicker.popupOpen || dayTimePicker.popupOpen || nightTimePicker.popupOpen
+  readonly property var intervalOptions: Schedule.intervalOptions()
+  readonly property var modeOptions: Schedule.modeOptions()
+
+  // Square wallpaper preview geometry.
+  readonly property real cellSize: Style.space(72)
+  readonly property real cellSpacing: Style.space(8)
 
   function open() {
     if (service) {
-      service.now = new Date()
-      service.refreshThemes()
+      service.nowEpoch = new Date().getTime()
+      service.refreshCatalog()
     }
     controller.show()
   }
@@ -51,11 +54,10 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: root.dropdownOpen
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(text) {
-        if ((text === "a" || text === "A") && root.service) root.service.applyNow()
+        if ((text === "a" || text === "A") && root.service) root.service.applyNext()
         else if ((text === "e" || text === "E") && root.service)
           root.service.setEnabled(!root.service.enabled)
       }
@@ -76,14 +78,13 @@ Panel {
 
           PanelHero {
             width: parent.width
-            title: "Theme Scheduler"
-            meta: !root.service ? "Service unavailable"
-              : (root.service.enabled ? root.service.nextSwitchText : "Automatic switching is off")
+            title: "Auto Wallpaper"
+            meta: !root.service ? "Service unavailable" : root.service.nextText()
             foreground: root.foreground
             fontFamily: root.fontFamily
             iconComponent: Component {
               Text {
-                text: root.service && root.service.period === "day" ? "󰖨" : "󰖔"
+                text: "🖼"
                 textFormat: Text.PlainText
                 color: root.foreground
                 font.family: root.fontFamily
@@ -91,11 +92,96 @@ Panel {
               }
             }
           }
+          PanelSeparator { width: parent.width; foreground: root.foreground }
+
+          PanelSectionHeader {
+            text: "WALLPAPERS"
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+          }
+
+          Text {
+            width: parent.width
+            text: root.service ? root.service.statusText() : ""
+            textFormat: Text.PlainText
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+            wrapMode: Text.WordWrap
+          }
+
+          Flow {
+            width: parent.width
+            spacing: root.cellSpacing
+
+            Repeater {
+              model: root.service ? root.service.wallpaperList : []
+
+              delegate: Rectangle {
+                id: cell
+                required property var modelData
+                readonly property bool isCurrent: root.service
+                  && root.service.currentWallpaper === modelData.path
+                width: root.cellSize
+                height: root.cellSize
+                radius: Style.space(6)
+                border.color: cell.isCurrent ? root.foreground : root.dim
+                border.width: cell.isCurrent ? 2 : 1
+                color: root.foreground
+                clip: true
+
+                Image {
+                  anchors.fill: parent
+                  source: Util.fileUrl(cell.modelData.path)
+                  fillMode: Image.PreserveAspectCrop
+                  asynchronous: true
+                  cache: true
+                  smooth: true
+                }
+
+                Rectangle {
+                  anchors.fill: parent
+                  radius: Style.space(6)
+                  color: Util.alpha(root.foreground, cell.isCurrent ? 0 : 0.22)
+                }
+
+                ToolTip.visible: cellMouse.containsMouse
+                ToolTip.text: cell.modelData.name
+                ToolTip.delay: 500
+
+                MouseArea {
+                  id: cellMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: if (root.service) root.service.setWallpaper(cell.modelData.path)
+                }
+              }
+            }
+          }
+
+          Text {
+            width: parent.width
+            text: "Click a wallpaper to set it now. The current one is highlighted with a border."
+            textFormat: Text.PlainText
+            color: root.dim
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.WordWrap
+          }
+
+          PanelSeparator { width: parent.width; foreground: root.foreground }
+
+          PanelSectionHeader {
+            text: "SCHEDULE"
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+          }
 
           Toggle {
             width: parent.width
             label: "Automatic switching"
-            description: "Use local time and catch up after sleep or restart."
+            description: "Cycles the active theme's wallpapers on an interval."
             checked: root.service ? root.service.enabled : false
             foreground: root.foreground
             fontFamily: root.fontFamily
@@ -103,121 +189,69 @@ Panel {
             onClicked: if (root.service) root.service.setEnabled(!root.service.enabled)
           }
 
-          PanelSeparator { width: parent.width; foreground: root.foreground }
-
-          PanelSectionHeader {
-            text: "DAY"
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-          }
-
           Row {
             width: parent.width
             spacing: Style.space(10)
 
-            SearchableDropdown {
-              id: dayThemePicker
-              width: parent.width - dayTimePicker.width - parent.spacing
-              label: "Theme"
-              value: root.service ? root.service.dayTheme : ""
-              options: root.service ? root.service.dayThemeOptions : []
-              placeholderText: "Search themes..."
+            Dropdown {
+              id: intervalPicker
+              width: Style.space(150)
+              label: "Interval"
+              value: root.service ? String(root.service.intervalMinutes) : "60"
+              options: root.intervalOptions
               foreground: root.foreground
               fontFamily: root.fontFamily
-              onChanged: function(value) { if (root.service) root.service.updateSchedule({ dayTheme: value }) }
+              onChanged: function(value) {
+                if (root.service) root.service.updateSchedule({ intervalMinutes: Number(value) })
+              }
             }
 
             Dropdown {
-              id: dayTimePicker
-              width: Style.space(110)
-              label: "Starts"
-              value: root.service ? String(root.service.dayStart) : "420"
-              options: root.timeOptions
+              id: modePicker
+              width: parent.width - intervalPicker.width - parent.spacing
+              label: "Order"
+              value: root.service ? root.service.mode : "sequential"
+              options: root.modeOptions
               foreground: root.foreground
               fontFamily: root.fontFamily
-              onChanged: function(value) { if (root.service) root.service.updateSchedule({ dayStart: Number(value) }) }
-            }
-          }
-
-          PanelSectionHeader {
-            text: "NIGHT"
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-          }
-
-          Row {
-            width: parent.width
-            spacing: Style.space(10)
-
-            SearchableDropdown {
-              id: nightThemePicker
-              width: parent.width - nightTimePicker.width - parent.spacing
-              label: "Theme"
-              value: root.service ? root.service.nightTheme : ""
-              options: root.service ? root.service.nightThemeOptions : []
-              placeholderText: "Search themes..."
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-              onChanged: function(value) { if (root.service) root.service.updateSchedule({ nightTheme: value }) }
-            }
-
-            Dropdown {
-              id: nightTimePicker
-              width: Style.space(110)
-              label: "Starts"
-              value: root.service ? String(root.service.nightStart) : "1140"
-              options: root.timeOptions
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-              onChanged: function(value) { if (root.service) root.service.updateSchedule({ nightStart: Number(value) }) }
-            }
-          }
-
-          PanelSeparator { width: parent.width; foreground: root.foreground }
-
-          Column {
-            width: parent.width
-            spacing: Style.space(5)
-
-            Text {
-              width: parent.width
-              text: root.service ? "Current: " + root.service.currentTheme
-                + " · Scheduled: " + root.service.desiredTheme : ""
-              textFormat: Text.PlainText
-              color: root.foreground
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              wrapMode: Text.WordWrap
-            }
-
-            Text {
-              visible: root.service && (root.service.lastError !== "" || root.service.lastAction !== "")
-              width: parent.width
-              text: root.service && root.service.lastError !== ""
-                ? root.service.lastError : (root.service ? root.service.lastAction : "")
-              textFormat: Text.PlainText
-              color: root.service && root.service.lastError !== "" ? root.urgent : root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              wrapMode: Text.WordWrap
+              onChanged: function(value) {
+                if (root.service) root.service.updateSchedule({ mode: value })
+              }
             }
           }
 
           Button {
             width: parent.width
-            text: root.service && root.service.switchBusy ? "Applying…" : "Apply scheduled theme now"
+            text: root.service && root.service.busy ? "Applying…" : "Apply next wallpaper now"
             iconText: "󰑐"
             bordered: true
             focusable: true
-            enabled: root.service && !root.service.switchBusy
+            enabled: root.service && !root.service.busy
             foreground: root.foreground
             fontFamily: root.fontFamily
-            onClicked: if (root.service) root.service.applyNow()
+            onClicked: if (root.service) root.service.applyNext()
+          }
+
+          PanelSeparator { width: parent.width; foreground: root.foreground }
+
+          Text {
+            visible: root.service && (root.service.lastError !== "" || root.service.lastAction !== "")
+            width: parent.width
+            text: root.service && root.service.lastError !== ""
+              ? root.service.lastError : (root.service ? root.service.lastAction : "")
+            textFormat: Text.PlainText
+            color: root.service && root.service.lastError !== "" ? root.urgent : root.dim
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.WordWrap
           }
 
           Text {
             width: parent.width
-            text: "Manual theme choices remain in place until the next scheduled boundary. Middle-click the bar icon to apply immediately."
+            text: "Manual choices and scheduled changes share the same rotation. "
+              + (root.service && root.service.shuffle
+                  ? "Shuffle plays every wallpaper once before repeating."
+                  : "Sequential order advances by one wallpaper each interval.")
             textFormat: Text.PlainText
             color: root.dim
             font.family: root.fontFamily
@@ -229,3 +263,4 @@ Panel {
     }
   }
 }
+
