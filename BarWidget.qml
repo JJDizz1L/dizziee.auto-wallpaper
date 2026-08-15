@@ -75,7 +75,7 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "🖼"
+    text: "󰉊"
     dimmed: !root.ready || !root.service.enabled
     active: root.showError
     tooltipText: !root.ready ? "Auto Wallpaper unavailable"
