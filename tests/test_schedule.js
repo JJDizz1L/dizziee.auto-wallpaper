@@ -29,8 +29,11 @@ function ok(label, condition) {
 eq("defaults normalize empty", Schedule.normalize({}), Schedule.DEFAULTS);
 eq("invalid values normalize", Schedule.normalize({ enabled: 1, intervalMinutes: 0, mode: "z" }),
   Schedule.DEFAULTS);
-eq("clamps interval over budget to default", Schedule.normalize({ intervalMinutes: 99999 }).intervalMinutes, 60);
+eq("clamps interval over budget to default", Schedule.normalize({ intervalMinutes: 99999 }).intervalMinutes, 30);
 eq("accepts shuffle mode", Schedule.normalize({ mode: "shuffle" }).mode, "shuffle");
+ok("enabled defaults on when unspecified", Schedule.normalize({}).enabled === true);
+ok("explicit disabled stays off", Schedule.normalize({ enabled: false }).enabled === false);
+eq("default interval is 30 minutes", Schedule.normalize({}).intervalMinutes, 30);
 eq("interval label minutes", Schedule.intervalLabel(30), "Every 30 min");
 eq("interval label single hour", Schedule.intervalLabel(60), "Every 1 hour");
 eq("interval label hours", Schedule.intervalLabel(180), "Every 3 hours");
@@ -39,11 +42,11 @@ eq("mode options", Schedule.modeOptions().length, 2);
 
 // --- catalog + names ---
 const catalog = Schedule.parseWallpaperCatalog(
-  "/some/green hills.jpg\n/some/dark.webp\n\n/some/green hills.jpg\n"
+  "/some/green hills.jpg\t/thumb/green.jpg\n/some/dark.webp\n\n/some/green hills.jpg\t/thumb/other.jpg\n"
 );
-eq("parse catalog dedupes and trims", catalog, [
-  "/some/green hills.jpg",
-  "/some/dark.webp"
+eq("parse catalog dedupes, keeps thumb, falls back", catalog, [
+  { path: "/some/green hills.jpg", thumb: "/thumb/green.jpg" },
+  { path: "/some/dark.webp", thumb: "/some/dark.webp" }
 ]);
 eq("wallpaper name", Schedule.wallpaperName("/some/green-grass_01.jpg"), "Green Grass 01");
 eq("wallpaper name unknown", Schedule.wallpaperName(""), "Unknown");

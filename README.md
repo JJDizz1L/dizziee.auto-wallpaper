@@ -27,8 +27,9 @@ shell restart.
 omarchy plugin add https://github.com/JJDizz1L/dizziee.auto-wallpaper.git --enable
 ```
 
-Add the widget to the bar, pick an interval and order, then enable automatic
-switching. It is safe on first install: the automation toggle defaults to off.
+Add the widget to the bar and it starts cycling automatically — automatic switching
+is on by default with a 30-minute interval. Adjust the interval, order (sequential
+or shuffle), or switch it off from the panel.
 
 ## Requirements
 

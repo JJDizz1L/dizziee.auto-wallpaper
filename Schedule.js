@@ -1,8 +1,8 @@
 .pragma library
 
 var DEFAULTS = {
-  enabled: false,
-  intervalMinutes: 60,
+  enabled: true,
+  intervalMinutes: 30,
   mode: "sequential",
   lastChangeEpoch: 0,
   cycle: [],
@@ -30,7 +30,7 @@ function mode(value, fallback) {
 function normalize(raw) {
   var source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}
   return {
-    enabled: source.enabled === true,
+    enabled: typeof source.enabled === "boolean" ? source.enabled : DEFAULTS.enabled,
     intervalMinutes: interval(source.intervalMinutes, DEFAULTS.intervalMinutes),
     mode: mode(source.mode, DEFAULTS.mode),
     lastChangeEpoch: integer(source.lastChangeEpoch, DEFAULTS.lastChangeEpoch),
@@ -40,17 +40,20 @@ function normalize(raw) {
   }
 }
 
-// Parse the catalog script's newline-separated absolute paths into a list,
-// ignoring blank lines and keeping stable file order.
+// Parse the catalog script's tab-separated rows "<path>\t<thumbnail path>"
+// into an array of { path, thumb }. Blank lines are ignored; a row without a
+// thumbnail column falls back to the original path.
 function parseWallpaperCatalog(text) {
   var result = []
   var seen = {}
   var lines = String(text || "").split("\n")
   for (var i = 0; i < lines.length; i++) {
-    var path = lines[i].trim()
+    var fields = lines[i].split("\t")
+    var path = String(fields[0] || "").trim()
     if (!path || seen[path]) continue
-    result.push(path)
     seen[path] = true
+    var thumb = String(fields[1] || "").trim()
+    result.push({ path: path, thumb: thumb || path })
   }
   return result
 }

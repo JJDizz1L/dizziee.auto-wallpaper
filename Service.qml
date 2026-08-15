@@ -14,10 +14,13 @@ Item {
   readonly property string catalogScriptPath: decodeURIComponent(
     String(Qt.resolvedUrl("WallpaperCatalog.sh")).replace(/^file:\/\//, ""))
 
-  // Watched config (mirrors Schedule.DEFAULTS).
+  // Watched config (mirrors Schedule.DEFAULTS). `enabled` and `intervalMinutes`
+  // are literal so the shipped defaults (on, 30-min) always apply for fresh
+  // installs and aren't lost to a stale cached Schedule library or a
+  // theme-change write that runs before the config file has loaded.
   property bool loaded: false
-  property bool enabled: false
-  property int intervalMinutes: Schedule.DEFAULTS.intervalMinutes
+  property bool enabled: true
+  property int intervalMinutes: 30
   property string mode: Schedule.DEFAULTS.mode
   property int lastChangeEpoch: Schedule.DEFAULTS.lastChangeEpoch
   property var cycle: []
@@ -99,7 +102,9 @@ Item {
   }
 
   function refreshCatalog() {
-    if (!catalogProc.running) catalogProc.running = true
+    // Populate Omarchy's wallpaper thumbnail cache first (ids under
+    // ~/.cache/omarchy/image-selector), then list paths + thumbs.
+    if (!cacheProc.running) cacheProc.running = true
   }
 
   function updateCurrent() {
@@ -172,6 +177,10 @@ Item {
     var theme = String(slug || "").trim()
     root.currentTheme = theme
     root.currentThemeDisplay = Schedule.wallpaperName(theme) || "Unknown"
+    // Don't persist on a theme event that races ahead of the config file
+    // loading; otherwise in-memory defaults could be written out first and
+    // appear to "disable" (or otherwise clobber) saved settings.
+    if (!root.loaded) return
     // New theme, new wallpaper set: let the user see it before any scheduled
     // switch, and let pickNext rebuild the shuffle cycle on the next change.
     root.saveConfig({ lastChangeEpoch: Date.now(), cycle: [], cycleTheme: "" })
@@ -230,6 +239,15 @@ Item {
   }
 
   Process {
+    id: cacheProc
+    command: ["omarchy-theme-bg-cache"]
+    onExited: function(exitCode) {
+      // Run the list either way; missing thumbnails fall back to the original.
+      if (!catalogProc.running) catalogProc.running = true
+    }
+  }
+
+  Process {
     id: catalogProc
     command: ["bash", root.catalogScriptPath]
     stdout: StdioCollector {
@@ -245,12 +263,16 @@ Item {
         root.lastError = String(catalogError.text || "Could not list wallpapers").trim()
         return
       }
-      root.catalogPaths = Schedule.parseWallpaperCatalog(catalogOutput.text)
+      var parsed = Schedule.parseWallpaperCatalog(catalogOutput.text)
+      var paths = []
       var list = []
-      for (var i = 0; i < root.catalogPaths.length; i++) {
-        var path = root.catalogPaths[i]
-        list.push({ path: path, name: Schedule.wallpaperName(path) })
+      for (var i = 0; i < parsed.length; i++) {
+        var entry = parsed[i]
+        if (!entry.path) continue
+        paths.push(entry.path)
+        list.push({ path: entry.path, thumb: entry.thumb, name: Schedule.wallpaperName(entry.path) })
       }
+      root.catalogPaths = paths
       root.wallpaperList = list
       Qt.callLater(root.reconcile)
     }

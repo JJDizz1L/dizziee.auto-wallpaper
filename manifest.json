@@ -19,6 +19,36 @@
     "description": "Preview and automatically cycle the active theme's wallpapers.",
     "category": "System",
     "allowMultiple": false,
-    "defaultSection": "right"
+    "defaultSection": "right",
+    "defaults": {
+      "enabled": true,
+      "intervalMinutes": 30,
+      "mode": "sequential"
+    },
+    "schema": [
+      {
+        "key": "enabled",
+        "type": "boolean",
+        "label": "Automatic switching",
+        "description": "Start cycling wallpapers automatically.",
+        "defaultValue": true
+      },
+      {
+        "key": "intervalMinutes",
+        "type": "integer",
+        "label": "Interval (minutes)",
+        "description": "How often the wallpaper changes.",
+        "min": 5,
+        "max": 1440,
+        "defaultValue": 30
+      },
+      {
+        "key": "mode",
+        "type": "enum",
+        "label": "Order",
+        "options": ["sequential", "shuffle"],
+        "defaultValue": "sequential"
+      }
+    ]
   }
 }

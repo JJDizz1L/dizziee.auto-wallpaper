@@ -132,7 +132,11 @@ Panel {
 
                 Image {
                   anchors.fill: parent
-                  source: Util.fileUrl(cell.modelData.path)
+                  // Preview the cached thumbnail (Omarchy image-selector cache),
+                  // downscaled at load so we never decode the full-resolution
+                  // wallpaper into memory just for a 72px grid cell.
+                  source: Util.fileUrl(cell.modelData.thumb)
+                  sourceSize: Qt.size(240, 240)
                   fillMode: Image.PreserveAspectCrop
                   asynchronous: true
                   cache: true
