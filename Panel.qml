@@ -27,7 +27,11 @@ Panel {
   function open() {
     if (service) {
       service.nowEpoch = new Date().getTime()
-      service.refreshCatalog()
+      // Only when opened: refresh current wallpaper + warm Omarchy thumbnails
+      // so previews are cheap and current. Nothing runs while the plugin is
+      // closed.
+      service.updateCurrent()
+      service.refreshCatalog(true)
     }
     controller.show()
   }
@@ -132,10 +136,11 @@ Panel {
 
                 Image {
                   anchors.fill: parent
-                  // Preview the cached thumbnail (Omarchy image-selector cache),
-                  // downscaled at load so we never decode the full-resolution
-                  // wallpaper into memory just for a 72px grid cell.
-                  source: Util.fileUrl(cell.modelData.thumb)
+                  // Only load when the panel is actually open; gating the
+                  // source on `root.opened` means a closed/idle plugin decodes
+                  // no image data at all. Previews use Omarchy's cached
+                  // thumbnail + a small sourceSize so the decode is tiny.
+                  source: root.opened ? Util.fileUrl(cell.modelData.thumb) : ""
                   sourceSize: Qt.size(240, 240)
                   fillMode: Image.PreserveAspectCrop
                   asynchronous: true

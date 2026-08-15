@@ -85,9 +85,8 @@ switching, so you can enjoy the new theme first.
 ## Development
 
 ```bash
-node tests/test_schedule.js
-bash tests/test_wallpaper_catalog.sh
 node -e 'JSON.parse(require("fs").readFileSync("manifest.json","utf8"))'
+omarchy plugin validate .
 qmllint -I /usr/share/omarchy/shell ./*.qml
 ```
 

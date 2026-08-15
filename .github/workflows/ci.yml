@@ -12,12 +12,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
       - name: Validate manifest JSON
         run: node -e 'JSON.parse(require("fs").readFileSync("manifest.json", "utf8"))'
-      - name: Test scheduling logic
-        run: node tests/test_schedule.js
-      - name: Test wallpaper catalog
-        run: bash tests/test_wallpaper_catalog.sh

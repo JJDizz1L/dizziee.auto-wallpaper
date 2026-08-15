@@ -101,10 +101,16 @@ Item {
     root.lastAction = "Schedule saved"
   }
 
-  function refreshCatalog() {
-    // Populate Omarchy's wallpaper thumbnail cache first (ids under
-    // ~/.cache/omarchy/image-selector), then list paths + thumbs.
-    if (!cacheProc.running) cacheProc.running = true
+  // Cheap vs. expensive listing. The default path only reads wallpaper
+  // paths/thumbnails from disk (needed for scheduling) and performs no cache
+  // generation. Thumbnail generation (vips) is deferred until the panel is
+  // actually opened so an idle/closed plugin spends ~no resources.
+  function refreshCatalog(ensureThumbs) {
+    if (ensureThumbs === true) {
+      if (!cacheProc.running) cacheProc.running = true
+      return
+    }
+    if (!catalogProc.running) catalogProc.running = true
   }
 
   function updateCurrent() {
@@ -300,14 +306,13 @@ Item {
   }
 
   Timer {
-    id: tickTimer
-    interval: 5000
+    id: scheduleTimer
+    interval: 60000
     running: root.loaded
     repeat: true
-    onTriggered: {
-      root.updateCurrent()
-      root.reconcile()
-    }
+    // Pure in-memory check; `reconcile` only spawns a process when a scheduled
+    // change is actually due (rare), so an idle plugin pays nothing.
+    onTriggered: root.reconcile()
   }
 
   Component.onCompleted: {
