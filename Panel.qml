@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 import "Schedule.js" as Schedule
@@ -20,16 +21,21 @@ Panel {
   readonly property var intervalOptions: Schedule.intervalOptions()
   readonly property var modeOptions: Schedule.modeOptions()
 
-  // Square wallpaper preview geometry.
+  // Square wallpaper preview geometry. Cells are exactly cellSize x cellSize
+  // with a wrapping grid driven by the content width.
   readonly property real cellSize: Style.space(72)
   readonly property real cellSpacing: Style.space(8)
+  readonly property int gridColumns: Math.max(1, Math.floor(
+    ((content ? content.width : 0) + root.cellSpacing) / (root.cellSize + root.cellSpacing)))
+  readonly property int gridRows: Math.ceil(
+    (root.service ? root.service.wallpaperList.length : 0) / root.gridColumns)
+  readonly property real gridHeight: root.gridRows * root.cellSize
+    + (root.gridRows > 1 ? (root.gridRows - 1) * root.cellSpacing : 0)
 
   function open() {
     if (service) {
       service.nowEpoch = new Date().getTime()
-      // Only when opened: refresh current wallpaper + warm Omarchy thumbnails
-      // so previews are cheap and current. Nothing runs while the plugin is
-      // closed.
+      // Only when opened: refresh current wallpaper + warm Omarchy thumbnails.
       service.updateCurrent()
       service.refreshCatalog(true)
     }
@@ -75,13 +81,13 @@ Panel {
         interactive: contentHeight > height
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-        Column {
+        ColumnLayout {
           id: content
           width: parent.width
           spacing: Style.space(12)
 
           PanelHero {
-            width: parent.width
+            Layout.fillWidth: true
             title: "Auto Wallpaper"
             meta: !root.service ? "Service unavailable" : root.service.nextText()
             foreground: root.foreground
@@ -96,16 +102,17 @@ Panel {
               }
             }
           }
-          PanelSeparator { width: parent.width; foreground: root.foreground }
+
+          PanelSeparator { Layout.fillWidth: true; foreground: root.foreground }
 
           PanelSectionHeader {
+            Layout.fillWidth: true
             text: "WALLPAPERS"
             foreground: root.foreground
             fontFamily: root.fontFamily
           }
-
           Text {
-            width: parent.width
+            Layout.fillWidth: true
             text: root.service ? root.service.statusText() : ""
             textFormat: Text.PlainText
             color: root.foreground
@@ -115,7 +122,8 @@ Panel {
           }
 
           Flow {
-            width: parent.width
+            Layout.fillWidth: true
+            Layout.preferredHeight: root.gridHeight
             spacing: root.cellSpacing
 
             Repeater {
@@ -128,19 +136,14 @@ Panel {
                   && root.service.currentWallpaper === modelData.path
                 width: root.cellSize
                 height: root.cellSize
-                radius: Style.space(6)
-                border.color: cell.isCurrent ? root.foreground : root.dim
-                border.width: cell.isCurrent ? 2 : 1
                 color: root.foreground
                 clip: true
 
                 Image {
                   anchors.fill: parent
-                  // Only load when the panel is actually open; gating the
-                  // source on `root.opened` means a closed/idle plugin decodes
-                  // no image data at all. Previews use Omarchy's cached
+                  // Only decode when the panel is open; use Omarchy's cached
                   // thumbnail + a small sourceSize so the decode is tiny.
-                  source: root.opened ? Util.fileUrl(cell.modelData.thumb) : ""
+                  source: root.opened ? Util.fileUrl(modelData.thumb) : ""
                   sourceSize: Qt.size(240, 240)
                   fillMode: Image.PreserveAspectCrop
                   asynchronous: true
@@ -148,14 +151,22 @@ Panel {
                   smooth: true
                 }
 
+                // Dim the non-current cells for contrast.
                 Rectangle {
                   anchors.fill: parent
-                  radius: Style.space(6)
                   color: Util.alpha(root.foreground, cell.isCurrent ? 0 : 0.22)
                 }
 
+                // Current border drawn ON TOP so the image can't hide it.
+                Rectangle {
+                  anchors.fill: parent
+                  color: "transparent"
+                  border.color: cell.isCurrent ? root.foreground : root.dim
+                  border.width: cell.isCurrent ? 2 : 1
+                }
+
                 ToolTip.visible: cellMouse.containsMouse
-                ToolTip.text: cell.modelData.name
+                ToolTip.text: modelData.name
                 ToolTip.delay: 500
 
                 MouseArea {
@@ -163,14 +174,14 @@ Panel {
                   anchors.fill: parent
                   hoverEnabled: true
                   cursorShape: Qt.PointingHandCursor
-                  onClicked: if (root.service) root.service.setWallpaper(cell.modelData.path)
+                  onClicked: if (root.service) root.service.setWallpaper(modelData.path)
                 }
               }
             }
           }
 
           Text {
-            width: parent.width
+            Layout.fillWidth: true
             text: "Click a wallpaper to set it now. The current one is highlighted with a border."
             textFormat: Text.PlainText
             color: root.dim
@@ -179,34 +190,35 @@ Panel {
             wrapMode: Text.WordWrap
           }
 
-          PanelSeparator { width: parent.width; foreground: root.foreground }
+          PanelSeparator { Layout.fillWidth: true; foreground: root.foreground }
 
           PanelSectionHeader {
+            Layout.fillWidth: true
             text: "SCHEDULE"
             foreground: root.foreground
             fontFamily: root.fontFamily
           }
 
           Toggle {
-            width: parent.width
+            Layout.fillWidth: true
             label: "Automatic switching"
             description: "Cycles the active theme's wallpapers on an interval."
             checked: root.service ? root.service.enabled : false
             foreground: root.foreground
+            accent: Color.accent
             fontFamily: root.fontFamily
             enabled: root.service !== null
             onClicked: if (root.service) root.service.setEnabled(!root.service.enabled)
           }
 
-          Row {
-            width: parent.width
-            spacing: Style.space(10)
+          RowLayout {
+            Layout.fillWidth: true
+            spacing: Style.space(8)
 
             Dropdown {
-              id: intervalPicker
-              width: Style.space(150)
+              Layout.fillWidth: true
               label: "Interval"
-              value: root.service ? String(root.service.intervalMinutes) : "60"
+              value: root.service ? String(root.service.intervalMinutes) : "30"
               options: root.intervalOptions
               foreground: root.foreground
               fontFamily: root.fontFamily
@@ -216,8 +228,7 @@ Panel {
             }
 
             Dropdown {
-              id: modePicker
-              width: parent.width - intervalPicker.width - parent.spacing
+              Layout.fillWidth: true
               label: "Order"
               value: root.service ? root.service.mode : "sequential"
               options: root.modeOptions
@@ -230,22 +241,23 @@ Panel {
           }
 
           Button {
-            width: parent.width
+            Layout.fillWidth: true
             text: root.service && root.service.busy ? "Applying…" : "Apply next wallpaper now"
             iconText: "󰑐"
             bordered: true
             focusable: true
             enabled: root.service && !root.service.busy
             foreground: root.foreground
+            accent: Color.accent
             fontFamily: root.fontFamily
             onClicked: if (root.service) root.service.applyNext()
           }
 
-          PanelSeparator { width: parent.width; foreground: root.foreground }
+          PanelSeparator { Layout.fillWidth: true; foreground: root.foreground }
 
           Text {
+            Layout.fillWidth: true
             visible: root.service && (root.service.lastError !== "" || root.service.lastAction !== "")
-            width: parent.width
             text: root.service && root.service.lastError !== ""
               ? root.service.lastError : (root.service ? root.service.lastAction : "")
             textFormat: Text.PlainText
@@ -256,7 +268,7 @@ Panel {
           }
 
           Text {
-            width: parent.width
+            Layout.fillWidth: true
             text: "Manual choices and scheduled changes share the same rotation. "
               + (root.service && root.service.shuffle
                   ? "Shuffle plays every wallpaper once before repeating."
