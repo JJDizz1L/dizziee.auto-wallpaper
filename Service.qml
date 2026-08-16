@@ -61,14 +61,15 @@ Item {
     return Schedule.wallpaperName(root.currentWallpaper)
   }
 
-  function modeLabel() { return Schedule.modeLabel(root.mode) }
-  function intervalLabel() { return Schedule.intervalLabel(root.intervalMinutes) }
-
   function applyConfig(text) {
     var parsed = {}
     try { parsed = text && text.trim() ? JSON.parse(text) : {} }
     catch (error) { root.lastError = "Invalid config.json: " + error }
     var config = Schedule.normalize(parsed)
+    // A brand-new config has lastChangeEpoch 0; without this, the very first
+    // load would be "due" immediately and switch the wallpaper right after
+    // install. Start the clock now so the first change waits one full interval.
+    if (config.enabled && config.lastChangeEpoch <= 0) config.lastChangeEpoch = Date.now()
     root.enabled = config.enabled
     root.intervalMinutes = config.intervalMinutes
     root.mode = config.mode
@@ -191,7 +192,9 @@ Item {
     // switch, and let pickNext rebuild the shuffle cycle on the next change.
     root.saveConfig({ lastChangeEpoch: Date.now(), cycle: [], cycleTheme: "" })
     root.lastAction = "Theme changed to " + root.currentThemeDisplay
-    root.refreshCatalog()
+    // Warm thumbnails too: if the panel is open while the theme changes, the
+    // grid must not fall back to full-resolution previews.
+    root.refreshCatalog(true)
   }
 
   function onSetExited(exitCode) {

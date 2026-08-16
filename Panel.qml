@@ -143,11 +143,13 @@ Panel {
                   anchors.fill: parent
                   // Only decode when the panel is open; use Omarchy's cached
                   // thumbnail + a small sourceSize so the decode is tiny.
+                  // cache:false so the decoded pixmap is dropped on close
+                  // (re-decode on reopen is trivial for 240px thumbnails).
                   source: root.opened ? Util.fileUrl(modelData.thumb) : ""
                   sourceSize: Qt.size(240, 240)
                   fillMode: Image.PreserveAspectCrop
                   asynchronous: true
-                  cache: true
+                  cache: false
                   smooth: true
                 }
 
