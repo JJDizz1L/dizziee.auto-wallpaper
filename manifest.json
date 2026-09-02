@@ -8,11 +8,13 @@
   "description": "Preview the active theme's wallpapers and automatically cycle or shuffle them on a schedule.",
   "kinds": [
     "service",
-    "bar-widget"
+    "bar-widget",
+    "overlay"
   ],
   "entryPoints": {
     "service": "Service.qml",
-    "barWidget": "BarWidget.qml"
+    "barWidget": "BarWidget.qml",
+    "overlay": "Panel.qml"
   },
   "barWidget": {
     "displayName": "Auto Wallpaper",
