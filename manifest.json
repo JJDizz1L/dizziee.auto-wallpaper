@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "dizziee.auto-wallpaper",
   "name": "Auto Wallpaper",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "Dizziee",
   "license": "MIT",
   "description": "Preview the active theme's wallpapers and automatically cycle or shuffle them on a schedule.",
