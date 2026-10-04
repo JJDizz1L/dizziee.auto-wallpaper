@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The preview grid is centered in the panel instead of leaving the spare
+  width on the right.
+
 ## [1.0.0] - 2026-08-15
 
 ### Added
