@@ -40,7 +40,10 @@ thumbnail_for() {
        -o -iname '*.bmp' -o -iname '*.webp' \) -print 2>/dev/null
 } | sort -u | while IFS= read -r path; do
   full=$(realpath -m "$path")
-  thumb=$(thumbnail_for "$full")
+  # Omarchy keys its thumbnail cache by the path as listed in the backgrounds
+  # dir, which differs from the resolved path when that dir holds symlinks.
+  thumb=$(thumbnail_for "$path")
+  [[ $thumb == "$path" ]] && thumb=$(thumbnail_for "$full")
   [[ -n $thumb ]] || thumb="$full"
   printf '%s\t%s\n' "$full" "$thumb"
 done | sort -u
