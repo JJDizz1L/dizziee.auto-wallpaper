@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "Schedule.js" as Schedule
 
@@ -14,9 +15,9 @@ Panel {
   property var hostWidget: null
   property var service: null
   readonly property var barIdentity: hostWidget || root
-  readonly property color foreground: bar ? bar.foreground : Color.foreground
+  readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
   readonly property color dim: Qt.darker(foreground, 1.45)
-  readonly property color urgent: bar ? bar.urgent : Color.urgent
+  readonly property color urgent: bar ? bar.urgent : Commons.Color.urgent
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property var intervalOptions: Schedule.intervalOptions()
   readonly property var modeOptions: Schedule.modeOptions()
@@ -167,9 +168,15 @@ Panel {
                   border.width: cell.isCurrent ? 2 : 1
                 }
 
-                ToolTip.visible: cellMouse.containsMouse
-                ToolTip.text: modelData.name
-                ToolTip.delay: 500
+                // PanelToolTip sets a PlainText content item. A bare ToolTip
+                // would use AutoText and render markup from a wallpaper
+                // filename, including an <img> that fetches a remote URL.
+                PanelToolTip {
+                  visible: cellMouse.containsMouse
+                  text: modelData.name
+                  delay: 500
+                  fontFamily: root.fontFamily
+                }
 
                 MouseArea {
                   id: cellMouse
@@ -207,7 +214,7 @@ Panel {
             description: "Cycles the active theme's wallpapers on an interval."
             checked: root.service ? root.service.enabled : false
             foreground: root.foreground
-            accent: Color.accent
+            accent: Commons.Color.accent
             fontFamily: root.fontFamily
             enabled: root.service !== null
             onClicked: if (root.service) root.service.setEnabled(!root.service.enabled)
@@ -250,7 +257,7 @@ Panel {
             focusable: true
             enabled: root.service && !root.service.busy
             foreground: root.foreground
-            accent: Color.accent
+            accent: Commons.Color.accent
             fontFamily: root.fontFamily
             onClicked: if (root.service) root.service.applyNext()
           }

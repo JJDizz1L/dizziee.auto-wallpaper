@@ -115,8 +115,20 @@ Item {
 
   function applyConfig(text) {
     var parsed = {}
-    try { parsed = text && text.trim() ? JSON.parse(text) : {} }
-    catch (error) { root.lastError = "Invalid config.json: " + error }
+    if (text && text.trim() !== "") {
+      try {
+        parsed = JSON.parse(text)
+      } catch (error) {
+        // Do not replace the last good settings with defaults and then write
+        // them back over the user's file. Wait for a corrected file; the
+        // FileView watches it and calls this again.
+        root.lastError = "Invalid config.json: " + error
+        root.loaded = false
+        scheduleTimer.running = false
+        return
+      }
+    }
+    root.lastError = ""
     var config = Schedule.normalize(parsed)
     // A brand-new config has lastChangeEpoch 0; without this, the very first
     // load would be "due" immediately and switch the wallpaper right after
