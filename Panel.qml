@@ -22,6 +22,36 @@ Panel {
   readonly property var intervalOptions: Schedule.intervalOptions()
   readonly property var modeOptions: Schedule.modeOptions()
 
+  Commons.Translations {
+    id: strings
+    directory: Qt.resolvedUrl("i18n")
+  }
+
+  function intervalLabel(minutes) {
+    var value = Math.max(1, Math.min(1440, Math.round(Number(minutes) || 30)))
+    var count = Commons.I18n.formatNumber(value)
+    if (value < 60) return strings.t("wallpaper.everyMin").arg(count)
+    if (value % 60 === 0) {
+      var hours = Commons.I18n.formatNumber(value / 60)
+      return value === 60 ? strings.t("wallpaper.everyHour").arg(hours) : strings.t("wallpaper.everyHours").arg(hours)
+    }
+    return strings.t("wallpaper.everyMin").arg(count)
+  }
+
+  function translatedIntervalOptions() {
+    var steps = [5, 10, 15, 30, 45, 60, 90, 120, 180, 240, 360, 480, 720, 1440]
+    var out = []
+    for (var i = 0; i < steps.length; i++) out.push({ value: String(steps[i]), label: intervalLabel(steps[i]) })
+    return out
+  }
+
+  function translatedModeOptions() {
+    return [
+      { value: "sequential", label: strings.t("wallpaper.sequential") },
+      { value: "shuffle", label: strings.t("wallpaper.shuffle") }
+    ]
+  }
+
   // Square wallpaper preview geometry. Cells are exactly cellSize x cellSize
   // with a wrapping grid driven by the content width.
   readonly property real cellSize: Style.space(72)
@@ -89,8 +119,8 @@ Panel {
 
           PanelHero {
             Layout.fillWidth: true
-            title: "Auto Wallpaper"
-            meta: !root.service ? "Service unavailable" : root.service.nextText()
+            title: strings.t("wallpaper.title")
+            meta: !root.service ? strings.t("wallpaper.serviceUnavailable") : root.service.nextText()
             foreground: root.foreground
             fontFamily: root.fontFamily
             iconComponent: Component {
@@ -108,7 +138,7 @@ Panel {
 
           PanelSectionHeader {
             Layout.fillWidth: true
-            text: "WALLPAPERS"
+            text: strings.t("wallpaper.wallpapers")
             foreground: root.foreground
             fontFamily: root.fontFamily
           }
@@ -191,7 +221,7 @@ Panel {
 
           Text {
             Layout.fillWidth: true
-            text: "Click a wallpaper to set it now. The current one is highlighted with a border."
+            text: strings.t("wallpaper.hint")
             textFormat: Text.PlainText
             color: root.dim
             font.family: root.fontFamily
@@ -203,15 +233,15 @@ Panel {
 
           PanelSectionHeader {
             Layout.fillWidth: true
-            text: "SCHEDULE"
+            text: strings.t("wallpaper.schedule")
             foreground: root.foreground
             fontFamily: root.fontFamily
           }
 
           Toggle {
             Layout.fillWidth: true
-            label: "Automatic switching"
-            description: "Cycles the active theme's wallpapers on an interval."
+            label: strings.t("wallpaper.autoSwitch")
+            description: strings.t("wallpaper.autoSwitchDesc")
             checked: root.service ? root.service.enabled : false
             foreground: root.foreground
             accent: Commons.Color.accent
@@ -226,9 +256,9 @@ Panel {
 
             Dropdown {
               Layout.fillWidth: true
-              label: "Interval"
+              label: strings.t("wallpaper.interval")
               value: root.service ? String(root.service.intervalMinutes) : "30"
-              options: root.intervalOptions
+              options: root.translatedIntervalOptions()
               foreground: root.foreground
               fontFamily: root.fontFamily
               onChanged: function(value) {
@@ -238,9 +268,9 @@ Panel {
 
             Dropdown {
               Layout.fillWidth: true
-              label: "Order"
+              label: strings.t("wallpaper.order")
               value: root.service ? root.service.mode : "sequential"
-              options: root.modeOptions
+              options: root.translatedModeOptions()
               foreground: root.foreground
               fontFamily: root.fontFamily
               onChanged: function(value) {
@@ -251,7 +281,7 @@ Panel {
 
           Button {
             Layout.fillWidth: true
-            text: root.service && root.service.busy ? "Applying…" : "Apply next wallpaper now"
+            text: root.service && root.service.busy ? strings.t("wallpaper.applying") : strings.t("wallpaper.applyNow")
             iconText: "󰑐"
             bordered: true
             focusable: true
@@ -278,10 +308,9 @@ Panel {
 
           Text {
             Layout.fillWidth: true
-            text: "Manual choices and scheduled changes share the same rotation. "
-              + (root.service && root.service.shuffle
-                  ? "Shuffle plays every wallpaper once before repeating."
-                  : "Sequential order advances by one wallpaper each interval.")
+            text: root.service && root.service.shuffle
+              ? strings.t("wallpaper.rotationShuffle")
+              : strings.t("wallpaper.rotationSequential")
             textFormat: Text.PlainText
             color: root.dim
             font.family: root.fontFamily

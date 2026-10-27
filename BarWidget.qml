@@ -3,11 +3,17 @@ import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 
 BarWidget {
   id: root
   moduleName: "dizziee.auto-wallpaper"
+
+  Commons.Translations {
+    id: strings
+    directory: Qt.resolvedUrl("i18n")
+  }
 
   readonly property var service: bar && bar.shell
     ? bar.shell.serviceFor(root.moduleName) : null
@@ -91,8 +97,8 @@ BarWidget {
     text: "󰉊"
     dimmed: !root.ready || !root.service.enabled
     active: root.showError
-    tooltipText: !root.ready ? "Auto Wallpaper unavailable"
-      : (root.service.enabled ? root.service.nextText() : "Auto Wallpaper is off")
+    tooltipText: !root.ready ? strings.t("wallpaper.unavailable")
+      : (root.service.enabled ? root.service.nextText() : strings.t("wallpaper.isOff"))
     onPressed: function(code) {
       if (code === Qt.MiddleButton) root.applyNow()
       else root.toggle()
