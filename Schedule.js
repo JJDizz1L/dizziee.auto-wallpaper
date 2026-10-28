@@ -43,24 +43,16 @@ function normalize(raw) {
 // Parse the catalog script's tab-separated rows "<path>\t<thumbnail path>"
 // into an array of { path, thumb }. Blank lines are ignored; a row without a
 // thumbnail column falls back to the original path.
-var MAX_CATALOG_LINES = 10000
-var MAX_PATH_LEN = 1024
-
-function boundPath(value) {
-  var s = String(value || "").trim()
-  return s.length > MAX_PATH_LEN ? s.slice(0, MAX_PATH_LEN) : s
-}
-
 function parseWallpaperCatalog(text) {
   var result = []
   var seen = {}
   var lines = String(text || "").split("\n")
-  for (var i = 0; i < lines.length && result.length < MAX_CATALOG_LINES; i++) {
+  for (var i = 0; i < lines.length; i++) {
     var fields = lines[i].split("\t")
-    var path = boundPath(fields[0])
+    var path = String(fields[0] || "").trim()
     if (!path || seen[path]) continue
     seen[path] = true
-    var thumb = boundPath(fields[1])
+    var thumb = String(fields[1] || "").trim()
     result.push({ path: path, thumb: thumb || path })
   }
   return result
@@ -68,12 +60,12 @@ function parseWallpaperCatalog(text) {
 
 // Turn a wallpaper path into a short, human-readable display name.
 function wallpaperName(path) {
-  var base = boundPath(path).replace(/\\/g, "/").split("/").pop()
+  var base = String(path || "").replace(/\\/g, "/").split("/").pop()
   base = base.replace(/\.[^.]+$/, "")
   if (!base) return "Unknown"
   base = base.replace(/[-_.]+/g, " ")
   return base.replace(/\b[a-z]/g, function(letter) { return letter.toUpperCase() })
-    .replace(/\s+/g, " ").trim().slice(0, 128)
+    .replace(/\s+/g, " ").trim()
 }
 
 // Fisher-Yates shuffle. `rng` is optional to support deterministic tests.
