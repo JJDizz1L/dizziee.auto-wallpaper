@@ -1,21 +1,10 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import qs.Commons
-import qs.Commons as Commons
 import "Schedule.js" as Schedule
 
 Item {
   id: root
-
-  Commons.Translations {
-    id: strings
-    directory: Qt.resolvedUrl("i18n")
-  }
-
-  function fmtInt(value) {
-    return Commons.I18n.formatNumber(Math.floor(Number(value) || 0))
-  }
 
   readonly property string home: Quickshell.env("HOME")
   readonly property string configDir: home + "/.config/omarchy/auto-wallpaper"
@@ -169,12 +158,12 @@ Item {
   function setEnabled(value) {
     root.saveConfig({ enabled: value === true })
     if (value === true) Qt.callLater(root.applyNext)
-    else root.lastAction = strings.t("wallpaper.disabled")
+    else root.lastAction = "Automatic switching disabled"
   }
 
   function updateSchedule(patch) {
     root.saveConfig(patch)
-    root.lastAction = strings.t("wallpaper.saved")
+    root.lastAction = "Schedule saved"
   }
 
   // Cheap vs. expensive listing. The default path only reads wallpaper
@@ -201,19 +190,19 @@ Item {
   }
 
   function nextText() {
-    if (!root.enabled) return strings.t("wallpaper.off")
+    if (!root.enabled) return "Automatic switching is off"
     var target = root.peekNext()
-    if (!target) return strings.t("wallpaper.noOther")
+    if (!target) return "No other wallpaper to show"
     var minutes = Schedule.minutesUntil(root.currentConfig(), root.nowEpoch)
-    var prefix = minutes > 0 ? strings.t("wallpaper.min").arg(fmtInt(minutes)) : strings.t("wallpaper.now")
-    return strings.t("wallpaper.nextIn").arg(prefix).arg(Schedule.wallpaperName(target))
+    var prefix = minutes > 0 ? minutes + " min" : "now"
+    return "Next in " + prefix + " · " + Schedule.wallpaperName(target)
   }
 
   function statusText() {
-    var count = root.catalogPaths.length
-    var countKey = count === 1 ? "wallpaper.themeCount" : "wallpaper.themeCountPlural"
-    var modeName = root.mode === Schedule.MODE_SHUFFLE ? strings.t("wallpaper.shuffle") : strings.t("wallpaper.sequential")
-    return strings.t(countKey).arg(root.currentThemeDisplay).arg(fmtInt(count)) + " · " + modeName
+    return "Theme: " + root.currentThemeDisplay
+      + " · " + root.catalogPaths.length + " wallpaper"
+      + (root.catalogPaths.length === 1 ? "" : "s") + " · "
+      + Schedule.modeLabel(root.mode)
   }
 
   function applyNext() {
@@ -225,7 +214,7 @@ Item {
       root.switchTo(result.path, result)
     } else {
       root.lastAction = root.catalogPaths.length > 0
-        ? strings.t("wallpaper.onlyOne") : strings.t("wallpaper.noWallpapers")
+        ? "Already showing the only wallpaper" : "No wallpapers for this theme"
       root.saveConfig({ lastChangeEpoch: Date.now() })
     }
   }
@@ -236,9 +225,9 @@ Item {
   }
 
   function switchTo(path, nextResult) {
-    var target = String(path || "").trim().slice(0, 1024)
+    var target = String(path || "").trim()
     if (!target) {
-      root.lastError = strings.t("wallpaper.noSelection")
+      root.lastError = "No wallpaper selected."
       return
     }
     root.pendingWallpaper = target
@@ -288,9 +277,9 @@ Item {
   }
 
   function onThemeChanged(slug) {
-    var theme = String(slug || "").trim().slice(0, 256)
+    var theme = String(slug || "").trim()
     root.currentTheme = theme
-    root.currentThemeDisplay = Schedule.wallpaperName(theme) || strings.t("wallpaper.unknown")
+    root.currentThemeDisplay = Schedule.wallpaperName(theme) || "Unknown"
     // Instant paint from disk while the background re-list runs.
     root.applyCatalogCache()
     // Don't persist on a theme event that races ahead of the config file
@@ -300,7 +289,7 @@ Item {
     // New theme, new wallpaper set: let the user see it before any scheduled
     // switch, and let pickNext rebuild the shuffle cycle on the next change.
     root.saveConfig({ lastChangeEpoch: Date.now(), cycle: [], cycleTheme: "" })
-    root.lastAction = strings.t("wallpaper.themeChanged").arg(root.currentThemeDisplay)
+    root.lastAction = "Theme changed to " + root.currentThemeDisplay
     // Warm thumbnails too: if the panel is open while the theme changes, the
     // grid must not fall back to full-resolution previews.
     root.refreshCatalog(true)
@@ -325,10 +314,10 @@ Item {
       // and an unguarded read would abort the rest of this handler below.
       var currentReader = root.currentProc
       if (currentReader && !currentReader.running) currentReader.running = true
-      root.lastAction = strings.t("wallpaper.setTo").arg(Schedule.wallpaperName(applied))
+      root.lastAction = "Wallpaper set to " + Schedule.wallpaperName(applied)
       root.lastError = ""
     } else {
-      root.lastError = String(setError.text || strings.t("wallpaper.changeFailed")).trim().slice(0, 512)
+      root.lastError = String(setError.text || "Wallpaper change failed").trim()
     }
     root.pendingWallpaper = ""
     root.pendingNext = null
@@ -382,7 +371,7 @@ Item {
     }
     onExited: function(exitCode) {
       if (exitCode !== 0) {
-        root.lastError = String(catalogError.text || strings.t("wallpaper.noList")).trim().slice(0, 512)
+        root.lastError = String(catalogError.text || "Could not list wallpapers").trim()
         return
       }
       var parsed = Schedule.parseWallpaperCatalog(catalogOutput.text)
