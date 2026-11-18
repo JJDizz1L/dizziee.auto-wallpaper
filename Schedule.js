@@ -132,7 +132,19 @@ function pickNext(config, catalog, currentPath, theme, rng) {
     if (cycle.length <= 1)
       return { path: "", cycle: cycle, cycleIndex: cycleIndex, changed: false }
 
-    var nextShuffle = (cycleIndex + 1) % cycle.length
+    var nextShuffle = cycleIndex + 1
+    if (nextShuffle >= cycle.length) {
+      // Every wallpaper has been shown once: start a fresh random order
+      // instead of replaying the same one, and don't open the new round with
+      // the wallpaper that just ended the old one.
+      cycle = shuffle(paths, rng)
+      if (cycle[0] === currentPath) {
+        var first = cycle[0]
+        cycle[0] = cycle[1]
+        cycle[1] = first
+      }
+      nextShuffle = 0
+    }
     return {
       path: cycle[nextShuffle],
       cycle: cycle,

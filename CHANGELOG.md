@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Shuffle starts a fresh random order after every wallpaper has played,
+  instead of replaying the same order.
 - Wallpapers reached through symlinked backgrounds folders now use Omarchy's
   cached thumbnails instead of decoding the full-size originals.
 
