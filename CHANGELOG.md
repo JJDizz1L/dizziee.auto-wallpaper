@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of replaying the same order.
 - Wallpapers reached through symlinked backgrounds folders now use Omarchy's
   cached thumbnails instead of decoding the full-size originals.
+- The preview grid is centered in the panel instead of leaving the spare
+  width on the right.
 
 ## [1.0.0] - 2026-08-15
 

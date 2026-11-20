@@ -153,7 +153,8 @@ Panel {
           }
 
           Flow {
-            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: root.gridColumns * root.cellSize + (root.gridColumns - 1) * root.cellSpacing
             Layout.preferredHeight: root.gridHeight
             spacing: root.cellSpacing
 
